@@ -97,6 +97,12 @@ export class CoverCropModal extends Modal {
                 this.cropper.setCanvasData({ width: prepared.width * restoredScale, height: prepared.height * restoredScale,
                   left: (bounds.width - width) / 2 - data.x * restoredScale,
                   top: (bounds.height - height) / 2 - data.y * restoredScale });
+              } else {
+                // The first canvas update is constrained by Cropper's old box.
+                // Fit again after the final frame has updated those limits.
+                const fittedScale = minimumRatio();
+                this.cropper.setCanvasData({ width: prepared.width * fittedScale, height: prepared.height * fittedScale,
+                  left: (bounds.width - prepared.width * fittedScale) / 2, top: (bounds.height - prepared.height * fittedScale) / 2 });
               }
               ready = true;
               slider.disabled = false;

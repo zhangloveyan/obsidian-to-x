@@ -1,6 +1,6 @@
 # Verification record
 
-Version: **0.1.15**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.16**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
@@ -30,9 +30,13 @@ For 0.1.15, one synthetic draft was created in the current Chinese X interface. 
 
 This verifies the DOM upload sequence against the current X interface. It was a browser-driven developer check, not a complete run of the packaged Obsidian plugin. The synthetic draft remains unpublished for review. No private article content or account-specific draft URL is included here. Other X interface languages and layout variants were not exercised.
 
+## Crop initialization verification
+
+Version 0.1.16 fixes initial crop scaling. A local browser harness using the production crop modal and Cropper.js reproduced a landscape image opening at 104% before the fix. After the fix, 800×440 landscape, 420×800 portrait and 1200×300 wide fixtures all opened centered at 100%, with the shrink button disabled and no empty area inside the frame. Landscape and portrait image widths matched the frame; the wide image matched its height. Manual zoom and movement still worked, applying produced a 620×248 PNG, and reopening restored the exact adjusted canvas and 120% zoom. This used an Obsidian DOM shim and synthetic images; it was not a live Obsidian application check.
+
 ## Installed artifacts
 
-The 0.1.15 package was copied into the existing Obsidian plugin directory, with all five installed files verified by SHA-256. Existing plugin settings and the enabled-plugin list were unchanged. The earlier 0.1.11 installation was also hash-verified before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
+The 0.1.16 package was copied into the existing Obsidian plugin directory, with all five installed files verified by SHA-256. Existing plugin settings and the enabled-plugin list were unchanged. The earlier 0.1.11 installation was also hash-verified before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
 
 ## User-run diagnostic evidence
 

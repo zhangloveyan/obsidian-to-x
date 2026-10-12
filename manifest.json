@@ -1,7 +1,7 @@
 {
   "id": "markdown-x-publisher",
   "name": "Markdown X Publisher",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "minAppVersion": "1.11.7",
   "description": "Preview Markdown notes and save X Article drafts using your Chrome session.",
   "author": "Ancle",
