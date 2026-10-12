@@ -38,7 +38,8 @@ function resumableBrowser(options: { failTitle?: boolean; pendingTransportFailur
       return { content: [{ type: 'text', text: '- 0: (current) [X](https://x.com/home)' }] };
     },
     async evaluate<T>(expression: string): Promise<T> {
-      const action = JSON.parse(expression.slice(expression.lastIndexOf(')(') + 2, -1)) as { kind?: string; id?: string; uploadId?: string; operation?: string; variables?: Record<string, unknown> };
+      const action = (expression.endsWith(')()') && expression.includes('function createArticleDraft(') ? { kind: 'create' }
+        : JSON.parse(expression.slice(expression.lastIndexOf(')(') + 2, -1))) as { kind?: string; id?: string; uploadId?: string; operation?: string; variables?: Record<string, unknown> };
       activity.push(action.kind ?? action.operation!);
       if (away) throw new Error('MXP_PAGE_CHANGED: 浏览器已离开本次草稿，操作已停止。');
       if (action.kind === 'create') return { previous: [] } as T;

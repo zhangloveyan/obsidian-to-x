@@ -101,7 +101,8 @@ function simulatedBrowser(options: { existing?: boolean; mutationError?: boolean
       return { content: [{ type: 'text', text: '- 0: [Example](https://example.com/)\n- 1: (current) [X](https://x.com/home)' }] };
     },
     async evaluate<T>(expression: string): Promise<T> {
-      const action = JSON.parse(expression.slice(expression.lastIndexOf(')(') + 2, -1)) as { kind?: string; operation?: string };
+      const action = (expression.endsWith(')()') && expression.includes('function createArticleDraft(') ? { kind: 'create' }
+        : JSON.parse(expression.slice(expression.lastIndexOf(')(') + 2, -1))) as { kind?: string; operation?: string };
       if (action.kind === 'create') return { previous: options.existing ? ['123'] : [] } as T;
       if (action.operation) {
         mutations++;

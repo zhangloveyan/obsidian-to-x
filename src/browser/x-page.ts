@@ -1,6 +1,7 @@
 import { serializeContent } from '../content/article';
 import type { BrowserBridge, MediaAsset, UploadedMedia, XContent } from '../model';
 import type { DraftSnapshot } from './x-protocol';
+import { createArticleDraft } from './article-controls';
 
 interface Character { getEntity(): string | null; getStyle(): { toArray(): string[]; has(value: string): boolean }; }
 interface DraftBlock {
@@ -17,7 +18,6 @@ interface DraftContent {
 }
 interface EditorProps {
   editorState?: { getCurrentContent(): DraftContent };
-  onFilesAdded?: (files: File[]) => unknown;
 }
 interface Fiber {
   return?: Fiber;
@@ -57,7 +57,7 @@ export class DraftMediaPendingError extends Error {
 }
 
 /** This function is serialized into the authenticated page. It has no host closures. */
-async function pageProgram(action: PageAction): Promise<unknown> {
+async function pageProgram(action: Exclude<PageAction, { kind: 'create' }>): Promise<unknown> {
   if (location.hostname !== 'x.com') throw new Error('MXP_PAGE_CHANGED: 当前页面不是 X，操作已停止。');
   if (/\/(?:i\/flow\/)?login(?:\/|$)/.test(location.pathname)) throw new Error('MXP_PAGE_CHANGED: 请先在 Chrome 中登录 X。');
   const pathId = location.pathname.match(/\/articles\/edit\/(\d+)\/?$/)?.[1] ?? null;
@@ -83,34 +83,6 @@ async function pageProgram(action: PageAction): Promise<unknown> {
     setTimeout(() => note.remove(), 3000);
     return true;
   }
-  if (action.kind === 'create') {
-    if (location.pathname !== '/compose/articles') throw new Error('MXP_PAGE_CHANGED: 页面已离开 X 文章列表，未创建草稿。');
-    const previous = [...document.querySelectorAll('a[href]')].flatMap(link => {
-      const match = link.getAttribute('href')?.match(/\/articles\/edit\/(\d+)/);
-      return match?.[1] ? [match[1]] : [];
-    });
-    const root = document.querySelector('main') ?? document.body;
-    const names = new Set(['create', 'compose', 'write', 'new article', 'create article', 'write an article', '撰写', '创建', '新建', '新建文章', '创建文章', '作成', '作成する', '記事を作成', 'créer', 'écrire', 'redactar', 'escribir', 'schreiben', 'verfassen', 'escrever', '새 글 작성', '글 작성']);
-    const controls = [...root.querySelectorAll<HTMLElement>('button,a[role="button"],a[data-testid="empty_state_button_text"]')].filter(control => {
-      const rect = control.getBoundingClientRect();
-      const style = getComputedStyle(control);
-      if (!rect.width || !rect.height || style.visibility === 'hidden' || style.display === 'none' || control.getAttribute('aria-disabled') === 'true' || control.hasAttribute('disabled')) return false;
-      if ((control.getAttribute('href') ?? '').includes('/articles/edit/')) return false;
-      const label = (control.getAttribute('aria-label') || control.textContent || '').trim().toLowerCase();
-      if (names.has(label)) return true;
-      if (control.tagName !== 'BUTTON') return control.getAttribute('data-testid') === 'empty_state_button_text';
-      // Observed X compose icon; it is never used to select a draft link.
-      return control.tagName === 'BUTTON' && [...control.querySelectorAll('svg path')].some(path => (path.getAttribute('d') ?? '').startsWith('M14.543 5.04297'));
-    });
-    // X can show the heading's create button together with a sidebar's empty
-    // state link. The native button is the primary action; links are fallback.
-    const buttons = controls.filter(control => control.tagName === 'BUTTON');
-    const candidates = buttons.length ? buttons : controls;
-    if (candidates.length > 1) throw new Error(`MXP_CREATE_AMBIGUOUS: 找到 ${candidates.length} 个新建文章入口，无法确定安全的创建按钮。`);
-    if (!candidates.length) throw new Error('未找到新建文章入口，请等待 X 文章列表加载完成。');
-    candidates[0]?.click();
-    return { previous };
-  }
   const editor = document.querySelector<HTMLElement>('[data-contents="true"]')?.closest<HTMLElement>('[contenteditable="true"]') ?? null;
   let fiber: Fiber | undefined;
   if (editor) {
@@ -119,12 +91,9 @@ async function pageProgram(action: PageAction): Promise<unknown> {
   }
   let content: DraftContent | undefined;
   let saved: SavedArticle | undefined;
-  let uploadOwner: EditorProps | undefined;
   for (let current = fiber, depth = 0; current && depth < 180; current = current.return, depth++) {
     const props = current.stateNode?.props;
     content ??= props?.editorState?.getCurrentContent();
-    if (!uploadOwner) uploadOwner = typeof props?.onFilesAdded === 'function' ? props
-      : typeof current.memoizedProps?.onFilesAdded === 'function' ? current.memoizedProps : undefined;
     if (pathId && !saved) saved = current.memoizedProps?.value?.store?.getState().entities?.articleEntities?.entities?.[pathId];
   }
   if (action.kind === 'focus') {
@@ -140,19 +109,81 @@ async function pageProgram(action: PageAction): Promise<unknown> {
       if (previous.articleId !== action.id) throw new Error('MXP_RESUME_MISMATCH: 上传标识属于另一篇草稿。');
       return { state: previous.state };
     }
-    if (!editor || !content || !uploadOwner?.onFilesAdded) throw new Error('当前 X 编辑器尚未提供原生图片上传接口。');
-    if (!action.uploadId || !action.asset.name || !action.asset.mime.startsWith('image/') || !action.asset.base64) throw new Error('图片上传参数无效。');
-    const decoded = atob(action.asset.base64);
-    const bytes = Uint8Array.from(decoded, character => character.charCodeAt(0));
-    const file = new File([bytes], action.asset.name, { type: action.asset.mime });
-    // Record submission before invoking X: a thrown/rejected callback may still
-    // have scheduled an upload. The host observes it instead of retrying bytes.
-    const entry: PageMemory['uploads'][string] = { articleId: action.id, state: 'submitted' };
-    memory.uploads[action.uploadId] = entry;
     try {
-      void Promise.resolve(uploadOwner.onFilesAdded([file])).catch(() => { entry.state = 'rejected'; });
-    } catch { entry.state = 'rejected'; }
-    return { state: entry.state };
+      if (!editor || !content) throw new Error('X 文章编辑器尚未准备好。');
+      if (!action.uploadId || !action.asset.name || !action.asset.mime.startsWith('image/') || !action.asset.base64) throw new Error('图片上传参数无效。');
+      const assertDraft = (): void => {
+        if (location.hostname !== 'x.com' || location.pathname !== `/compose/articles/edit/${action.id}` || !editor.isConnected) {
+          throw new Error('MXP_PAGE_CHANGED: 浏览器已离开本次草稿或编辑器已重建，未提交图片。');
+        }
+      };
+      const waitForElement = async <T>(find: () => T | null): Promise<T> => {
+        const deadline = Date.now() + 8000;
+        while (Date.now() < deadline) {
+          assertDraft();
+          const found = find();
+          if (found) return found;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        throw new Error('X 正文媒体选择窗口未准备好，请关闭其他弹窗后重试。');
+      };
+      // The always-mounted file input is the cover. Body images use X's insert
+      // dialog, opened through the current toolbar and its media/GIF section.
+      if (document.querySelector('[role="dialog"]')) throw new Error('请先关闭 X 页面中已打开的弹窗，再保存文章。');
+      const toolbar = document.getElementById('toolbar-styling-buttons');
+      const group = toolbar?.querySelector('[data-testid="btn-emoji"]')?.parentElement?.nextElementSibling;
+      const buttons = group?.querySelectorAll<HTMLButtonElement>('button');
+      if (buttons?.length !== 2 || !buttons[0] || buttons[0].disabled) throw new Error('X 正文媒体工具栏已变化，未提交图片。');
+      editor.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      const selection = window.getSelection();
+      if (!selection) throw new Error('无法定位 X 正文插入位置。');
+      selection.removeAllRanges();
+      selection.addRange(range);
+      editor.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      buttons[0].click();
+      const mediaItem = await waitForElement(() => {
+        const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+        const gif = items.findIndex(item => item.textContent?.trim() === 'GIF');
+        return gif === 1 && items.length >= 2 ? items[0]! : null;
+      });
+      assertDraft();
+      mediaItem.click();
+      const input = await waitForElement(() => {
+        const inputs = [...document.querySelectorAll<HTMLInputElement>('[role="dialog"] input[type="file"][multiple]')];
+        if (inputs.length > 1) throw new Error('X 正文图片入口不唯一，未提交图片。');
+        return inputs.length === 1 && !inputs[0]!.disabled ? inputs[0]! : null;
+      });
+      const accepted = input.accept.split(',').map(value => value.trim().toLowerCase());
+      if (!accepted.includes(action.asset.mime.toLowerCase()) && !accepted.includes('image/*')) throw new Error('X 正文媒体窗口不接受此图片格式。');
+      const decoded = atob(action.asset.base64);
+      const bytes = Uint8Array.from(decoded, character => character.charCodeAt(0));
+      const file = new File([bytes], action.asset.name, { type: action.asset.mime });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      assertDraft();
+      if (!input.isConnected) throw new Error('X 正文媒体窗口已关闭，未提交图片。');
+      if (memory.uploads[action.uploadId]) return { state: memory.uploads[action.uploadId]!.state };
+      // Record before dispatch: a listener can schedule an upload and then fail.
+      // Submitted means handed to the input; saved-media checks prove success.
+      const entry: PageMemory['uploads'][string] = { articleId: action.id, state: 'submitted' };
+      memory.uploads[action.uploadId] = entry;
+      try {
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch { entry.state = 'rejected'; }
+      return { state: entry.state };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (reason.startsWith('MXP_PAGE_CHANGED:')) throw error;
+      // Only the page can prove that no event was dispatched. A lost bridge
+      // response remains uncertain and must never trigger automatic re-upload.
+      const submitted = memory.uploads[action.uploadId];
+      return submitted ? { state: submitted.state } : { state: 'not-submitted', reason };
+    }
   }
   const entity_map: Array<{ key: string; value: { type: string; mutability: string; data: Record<string, unknown> } }> = [];
   const seen = new Set<string>();
@@ -184,7 +215,8 @@ async function pageProgram(action: PageAction): Promise<unknown> {
 
 export async function runPage<T>(bridge: BrowserBridge, action: PageAction): Promise<T> {
   try {
-    return await bridge.evaluate<T>(`(${pageProgram.toString()})(${JSON.stringify(action)})`);
+    const expression = action.kind === 'create' ? `(${createArticleDraft.toString()})()` : `(${pageProgram.toString()})(${JSON.stringify(action)})`;
+    return await bridge.evaluate<T>(expression);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const marker = 'MXP_PAGE_CHANGED:';
@@ -227,11 +259,13 @@ function identifier(value: unknown, label: string): string {
 
 function observedMedia(entityKey: string, item: Record<string, unknown>): ObservedMedia {
   const localId = item.localMediaId ?? item.local_media_id;
+  const category = item.mediaCategory ?? item.media_category;
+  const missingLocalId = localId === undefined || localId === null || localId === '';
   return {
     id: identifier(item.mediaId ?? item.media_id, '图片上传 ID'),
-    localId: identifier(localId ?? '1', '图片本地标识'),
-    localIdIsFallback: localId === undefined || localId === null,
-    category: identifier(item.mediaCategory ?? item.media_category ?? 'DraftTweetImage', '图片媒体类别'),
+    localId: missingLocalId ? '' : identifier(localId, '图片本地标识'),
+    localIdIsFallback: missingLocalId,
+    category: category === undefined || category === null || category === '' ? '' : identifier(category, '图片媒体类别'),
     entityKey,
   };
 }
@@ -295,8 +329,13 @@ function matchImages(previous: Map<string, UploadedMedia>, current: ObservedMedi
     if (new Set([entity, local, stableId].flatMap(match => match ? [match[0]] : [])).size > 1) throw new Error('图片实体、本地标识与媒体 ID 指向不同来源，已停止保存。');
     const source = (entity ?? local ?? stableId)?.[0];
     if (!source || media.has(source)) throw new Error('刷新前后无法唯一对应图片来源（本地标识及媒体 ID 已变化或重复），已停止保存。');
-    if (previous.get(source)?.category !== image.category) throw new Error('刷新前后图片媒体类别不一致。');
-    media.set(source, image);
+    const earlier = previous.get(source)!;
+    if (earlier.category && image.category && earlier.category !== image.category) throw new Error('刷新前后图片媒体类别不一致。');
+    // Hydration may omit metadata already observed on this exact native image.
+    const localId = image.localIdIsFallback ? ((earlier as Partial<ObservedMedia>).localIdIsFallback ? '' : earlier.localId) : image.localId;
+    const category = image.category || earlier.category;
+    if (!localId || !category) throw new DraftMediaPendingError('图片的真实本地标识或媒体类别尚未完整加载。');
+    media.set(source, { ...image, localId, category, localIdIsFallback: false } as ObservedMedia);
     order.push(source);
   }
   return { media, order };

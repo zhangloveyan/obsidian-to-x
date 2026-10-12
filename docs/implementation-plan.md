@@ -1,6 +1,6 @@
 # Architecture and implementation
 
-Current version: **0.1.14**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
+Current version: **0.1.15**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
 
 ## Product scope
 
@@ -16,6 +16,7 @@ The supported environment is desktop Obsidian 1.11.7 or later, Node.js 18 or lat
 | `src/model.ts`, `src/content/` | Note parsing, image preparation, content types and X wire serialization |
 | `src/browser/runtime.ts`, `src/browser/discovery.ts` | Official MCP connection and detection of installed Node/MCP programs |
 | `src/browser/x-page.ts` | Current page/editor inspection, native file submission and media reconciliation |
+| `src/browser/article-controls.ts` | Draft creation through the observed X button contract |
 | `src/browser/media-upload.ts` | Serial uploads, identity matching, readiness checks and in-memory upload progress |
 | `src/browser/x-draft.ts`, `src/browser/x-protocol.ts` | Draft creation, staged writes, continuation and saved-content verification |
 | `src/ui/`, `styles.css` | Preview, title/cover dialogs, crop interaction and problem-log display |
@@ -30,11 +31,15 @@ Temporary development artifacts belong in the ignored `work/` directory. Install
 1. Parse the note, strip non-code writing comments, prepare requested images and validate title, content, formatting ranges, links and conflicting image sources before opening a draft.
 2. Reuse or establish the official MCP connection, open the X Articles list, create a new draft and verify that it is empty. Every page operation checks the intended article identity.
 3. For an article requiring media, use `serializeContent` to save the non-image body through the GraphQL adapter. Reload and verify this preliminary body before sending any files.
-4. Submit each image through the current editor's native `onFilesAdded` callback. Re-resolve the mounted editor for every operation. Upload polling reads state without changing image positions.
+4. Focus the current editor and open its Insert Media dialog through the toolbar. Deliver each image to the dialog's multiple-file input with standard DOM file events; the separate cover input is never used for body media. Check the draft URL throughout the dialog transition and immediately before dispatch. Record the upload token before assigning files so a lost reply cannot cause duplicate submission.
 5. Confirm a file only when all earlier images match unique verified identities, exactly one new image exists, no media entity is pending, every image is bound in the saved article record, and consecutive observations are stable. Missing, extra or conflicting identities stop the save. An unconfirmed upload has a bounded 180-second wait.
 6. Reload and reconcile the uploaded media by identity, then serialize the complete body in source order. Write title, final body and optional cover, reload again and run `verifyDraft` against the expected content before reporting success.
 
 Repeated body references to the same source reuse one upload. Selecting a body image as cover retains its body occurrences. An independent cover is uploaded as media but excluded from the final body. Articles without media proceed directly to the final writes and reload verification.
+
+Draft creation uses the visible, enabled `main button[aria-label="create"]` observed on X, with uniqueness and existing-draft checks. It does not inspect translated labels or SVG paths. The upload adapter uses the current toolbar's emoji/insert group and media/GIF menu order, then requires a unique multiple-file input inside the dialog. Unexpected page structure stops the operation before file submission. These UI contracts were observed on the current Chinese X interface; the editor snapshot remains a read-only React/Draft compatibility adapter.
+
+Media local IDs and categories come from actual editor observations. Missing values can be inherited only after a unique match to the same previously observed image. New images with incomplete metadata remain pending and cannot advance the upload queue. No placeholder local ID or default media category is substituted into saved content.
 
 X's GraphQL operations and editor data are web compatibility interfaces rather than a supported public developer API. HTTP success alone is insufficient: persisted content, title, media and cover must pass verification after reload.
 

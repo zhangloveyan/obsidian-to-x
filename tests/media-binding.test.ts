@@ -5,14 +5,18 @@ import { saveDraft, type DraftSaveSession } from '../src/browser/x-draft';
 import { createImageCheckpoint, verifyImageCheckpoint } from '../src/browser/x-page';
 import type { DraftSnapshot } from '../src/browser/x-protocol';
 
-interface Image { key: string; id: string; localId?: string; category?: string; }
+interface Image { key: string; id: string; localId?: string | number | null; category?: string | null; }
 function nativeDraft(images: Image[]) {
   return {
     blocks: [
       ...images.map((image, index) => ({ key: `block-${index}`, type: 'atomic', text: ' ', data: {}, entity_ranges: [{ key: image.key, offset: 0, length: 1 }], inline_style_ranges: [] })),
       { key: 'caret', type: 'unstyled', text: '', data: {}, entity_ranges: [], inline_style_ranges: [] },
     ],
-    entity_map: images.map(image => ({ key: image.key, value: { type: 'MEDIA', mutability: 'IMMUTABLE', data: { mediaItems: [{ mediaId: image.id, ...(image.localId === undefined ? {} : { localMediaId: image.localId }), ...(image.category === undefined ? {} : { mediaCategory: image.category }) }] } } })),
+    entity_map: images.map(image => ({ key: image.key, value: { type: 'MEDIA', mutability: 'IMMUTABLE', data: { mediaItems: [{
+      mediaId: image.id,
+      ...(image.localId === null ? {} : { localMediaId: image.localId ?? `fixture-local-${image.key}` }),
+      ...(image.category === null ? {} : { mediaCategory: image.category ?? 'DraftTweetImage' }),
+    }] } } })),
   };
 }
 
@@ -51,13 +55,27 @@ test('reloaded media IDs follow unique local IDs even when entity keys are regen
   assert.throws(() => verifyImageCheckpoint(actual, checkpoint), /预期 2 张，页面 2 张，已保存 1 张/);
 });
 
-test('optional native metadata is normalized but default local IDs are never trusted for identity', () => {
-  const checkpoint = createImageCheckpoint(nativeDraft([{ key: 'entity-a', id: 'old-a' }]), new Map([['source-a', first]]));
-  assert.equal(checkpoint.media.get('source-a')?.localId, '1');
+test('missing native metadata preserves only values previously observed on the uniquely matched image', () => {
+  const checkpoint = createImageCheckpoint(nativeDraft([{ key: 'entity-a', id: 'old-a', localId: null, category: null }]), new Map([['source-a', first]]));
+  assert.equal(checkpoint.media.get('source-a')?.localId, 'local-a');
   assert.equal(checkpoint.media.get('source-a')?.category, 'DraftTweetImage');
-  assert.equal(verifyImageCheckpoint(snapshot([{ key: 'other-key', id: 'old-a' }]), checkpoint).get('source-a')?.id, 'old-a');
-  // The submitted fallback may be echoed as an explicit local ID on reload.
+  const restored = verifyImageCheckpoint(snapshot([{ key: 'other-key', id: 'old-a', localId: null, category: null }]), checkpoint);
+  assert.equal(restored.get('source-a')?.id, 'old-a');
+  assert.equal(restored.get('source-a')?.localId, 'local-a');
+  assert.equal(restored.get('source-a')?.category, 'DraftTweetImage');
+  // A literal value that was never observed is not an alias for missing data.
   assert.throws(() => verifyImageCheckpoint(snapshot([{ key: 'other-key', id: 'changed', localId: '1' }]), checkpoint), /无法唯一对应/);
+});
+
+test('checkpoint does not serialize unknown metadata and accepts delayed real numeric local IDs', () => {
+  const incomplete = new Map([['source-a', { id: 'old-a', localId: '', category: '', entityKey: 'entity-a' }]]);
+  assert.throws(() => createImageCheckpoint(nativeDraft([{ key: 'entity-a', id: 'old-a', localId: null, category: null }]), incomplete), /真实本地标识或媒体类别尚未完整/);
+  const complete = createImageCheckpoint(nativeDraft([{ key: 'entity-a', id: 'old-a', localId: 2, category: 'ObservedArticleImage' }]), incomplete);
+  assert.deepEqual(complete.content.entity_map[0]?.value.data, { entity_key: 'entity-a', media_items: [{ media_id: 'old-a', local_media_id: '2', media_category: 'ObservedArticleImage' }] });
+});
+
+test('a real conflicting media category is still rejected', () => {
+  assert.throws(() => createImageCheckpoint(nativeDraft([{ key: 'entity-a', id: 'old-a', localId: 'local-a', category: 'DifferentNativeCategory' }]), new Map([['source-a', first]])), /媒体类别不一致/);
 });
 
 test('ambiguous or conflicting identities cannot be repaired by matching image positions', () => {
@@ -97,7 +115,7 @@ function fastPolling(t: TestContext): () => number {
   return () => now;
 }
 
-function simulatedUpload(options: { uploadError?: boolean; missingSavedMedia?: boolean; editorCounts?: readonly number[]; bindingDelayReads?: number; changedReloadBody?: boolean; invalidReload?: 'identity' | 'extra' | 'format' } = {}) {
+function simulatedUpload(options: { uploadError?: boolean; missingSavedMedia?: boolean; editorCounts?: readonly number[]; bindingDelayReads?: number; changedReloadBody?: boolean; missingReloadMetadata?: boolean; invalidReload?: 'identity' | 'extra' | 'format' } = {}) {
   const request: DraftRequest = {
     title: 'Private title',
     blocks: [{ type: 'text', kind: 'unstyled', text: 'Private body', styles: [], links: [] }, ...Array.from({ length: 5 }, (_, index) => ({ type: 'image' as const, source: `private-source-${index}`, alt: '' }))],
@@ -123,11 +141,16 @@ function simulatedUpload(options: { uploadError?: boolean; missingSavedMedia?: b
       if (name === 'browser_press_key') keys.push(String(args.key));
       if (name === 'browser_navigate' && String(args.url).includes('/edit/')) {
         reloads++;
-        if (reloads === 2) for (const [index, image] of images.entries()) { image.id = `persisted-${index}`; image.key = `reloaded-${index}`; }
+        if (reloads === 2) for (const [index, image] of images.entries()) {
+          if (!options.missingReloadMetadata) image.id = `persisted-${index}`;
+          image.key = `reloaded-${index}`;
+          if (options.missingReloadMetadata) { image.localId = null; image.category = null; }
+        }
       }
       return { content: [{ type: 'text', text: '- 0: [X](https://x.com/home)' }] };
     },
     async evaluate<T>(expression: string): Promise<T> {
+      if (expression.includes('createArticleDraft') && expression.endsWith(')()')) return { previous: [] } as T;
       const action = JSON.parse(expression.slice(expression.lastIndexOf(')(') + 2, -1)) as { kind?: string; uploadId?: string; operation?: string; variables?: Record<string, unknown> };
       if (action.kind === 'create') return { previous: [] } as T;
       if (action.kind === 'toast' || action.kind === 'focus') return true as T;
@@ -209,6 +232,18 @@ test('reload waits for editor hydration or image binding without another upload'
     assert.equal(run.reloads(), 3);
     assert.equal(run.writes.length, 3);
   }
+});
+
+test('reload omissions retain previously observed metadata and keep all three reloads', async t => {
+  fastPolling(t);
+  const run = simulatedUpload({ missingReloadMetadata: true });
+  await saveDraft(run.bridge, run.request, () => undefined);
+  assert.equal(run.uploads(), 5);
+  assert.equal(run.reloads(), 3);
+  const content = run.writes.at(-1)!.variables.content_state as XContent;
+  const media = content.entity_map.filter(entity => entity.value.type === 'MEDIA');
+  assert.equal(media.length, 5);
+  media.forEach((entity, index) => assert.deepEqual(entity.value.data.media_items, [{ media_id: `temporary-${index}`, local_media_id: `local-${index}`, media_category: 'DraftTweetImage' }]));
 });
 
 test('permanently missing editor images time out without final writes or reupload', async t => {

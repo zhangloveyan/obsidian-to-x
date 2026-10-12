@@ -1,10 +1,10 @@
 # Verification record
 
-Version: **0.1.14**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.15**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
-`npm run package` passed TypeScript, the production build, whole-project ESLint and **157 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+`npm run package` passed TypeScript, the production build, whole-project ESLint and **173 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplied that alias inside each VM, preserving isolation from the host global object, and passed GitHub's Ubuntu build, lint and 157 tests. The affected tests still exercise real SDK child-process behavior. It also added an English README with a separate Chinese translation without changing application behavior.
 
@@ -12,19 +12,27 @@ Version 0.1.13 addresses the directory's style checks: Cropper.js CSS is in the 
 
 Version 0.1.14 removes note-property publishing options and the bundled YAML parser. Properties no longer supply a title or cover; the title comes from the first top-level H1 or filename, and a cover is selected in the dialog. The leading property block is excluded from article content without parsing its values. Regression checks cover ignored title/cover fields, invalid property values, filename fallback, absence of automatic covers and explicit cover assets. No live X draft was created for this change.
 
+Version 0.1.15 replaces article creation heuristics with the observed visible, enabled `main button[aria-label="create"]` control. Image submission opens the editor's insert-media dialog and dispatches standard file-input events; it no longer invokes a React upload callback. Unknown local media IDs and categories remain missing until observed, or are inherited from a uniquely matched image whose real values were already recorded. Missing fields stop progression and preserve continuation state. A definite pre-submission failure is retryable; a lost response remains uncertain and cannot cause another file submission.
+
 The current test suite covers:
 
 - Markdown parsing, hidden comments, UTF-16 formatting ranges, safe links, supported lists/headings and Markdown fallback blocks.
 - Serial native uploads, editor remounts, media-ID promotion, delayed saved-media binding, missing/extra/conflicting images and stable confirmation before the next file.
-- Timeouts, rejected callbacks, lost submission responses and explicit continuation without duplicate uploads; changed requests, pages and bodies stop continuation.
+- Timeouts, failed file handoffs, lost submission responses and explicit continuation without duplicate uploads; changed requests, pages and bodies stop continuation.
 - Preliminary body saves, lost write responses, image-only articles, repeated sources, conflicting image bytes/MIME, body-image cover reuse, independent covers and final saved-draft verification.
 - Runtime discovery, connection lifetime, MCP transport failure classification, diagnostic privacy, preview behavior and cover selection/cropping.
 
-The native page adapter was also extracted from an in-memory production bundle and executed in an isolated VM. Checks confirmed that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, and a token cannot submit to another draft. These are local simulations, not live X UI tests.
+The page adapters were also extracted from in-memory production bundles and executed in isolated VMs. Checks confirm that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, the cover input is excluded, and navigation or editor replacement stops submission. Ambiguous, disabled or unsuitable dialog inputs are rejected. Removing a known pre-submission blocker allows the same token to be tried safely. These are local simulations, not live X UI tests.
+
+## Live DOM upload verification
+
+For 0.1.15, one synthetic draft was created in the current Chinese X interface. Two generated PNG images were submitted using the media dialog's multiple-file input. The second submission exercised the same toolbar, menu, dialog and file-event sequence implemented by the adapter. After reloading, the draft still contained its test title, body text and both images. The observed media object supplied an actual local ID and media category.
+
+This verifies the DOM upload sequence against the current X interface. It was a browser-driven developer check, not a complete run of the packaged Obsidian plugin. The synthetic draft remains unpublished for review. No private article content or account-specific draft URL is included here. Other X interface languages and layout variants were not exercised.
 
 ## Installed artifacts
 
-The 0.1.11 package was installed and its five files verified by SHA-256 before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
+The 0.1.15 package was copied into the existing Obsidian plugin directory, with all five installed files verified by SHA-256. Existing plugin settings and the enabled-plugin list were unchanged. The earlier 0.1.11 installation was also hash-verified before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
 
 ## User-run diagnostic evidence
 

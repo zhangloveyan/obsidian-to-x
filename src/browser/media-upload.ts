@@ -22,6 +22,7 @@ interface PendingUpload {
   source: string;
   uploadId: string;
   before: Identity[];
+  candidate?: Identity;
   interrupted: boolean;
 }
 
@@ -77,8 +78,8 @@ function inspect(content: unknown): { body: XContent; media: ObservedMedia[] } {
       const localId = identifier(item.localMediaId ?? item.local_media_id);
       media.push({
         id: identifier(item.mediaId ?? item.media_id),
-        localId: localId ?? '1', localIdIsFallback: localId === null,
-        category: identifier(item.mediaCategory ?? item.media_category) ?? 'DraftTweetImage',
+        localId: localId ?? '', localIdIsFallback: localId === null,
+        category: identifier(item.mediaCategory ?? item.media_category) ?? '',
         entityKey: key,
       });
     }
@@ -131,10 +132,19 @@ function addUnique(values: string[], value: string): void {
   if (!values.includes(value)) values.push(value);
 }
 
+/** Missing fields may inherit only from this uniquely matched native identity. */
+function knownMetadata(media: ObservedMedia, previous: Identity['current']): ObservedMedia {
+  const localId = media.localIdIsFallback ? (previous.localIdIsFallback ? '' : previous.localId) : media.localId;
+  return { ...media, localId, localIdIsFallback: !localId, category: media.category || previous.category };
+}
+
 function observe(identity: Identity, media: ObservedMedia, documentId: string | undefined): void {
+  const known = knownMetadata(media, identity.current);
   if (media.id) {
-    identity.current = { id: media.id, localId: media.localId, localIdIsFallback: media.localIdIsFallback, category: media.category, entityKey: media.entityKey };
+    identity.current = { id: media.id, localId: known.localId, localIdIsFallback: known.localIdIsFallback, category: known.category, entityKey: media.entityKey };
     addUnique(identity.ids, media.id);
+  } else {
+    identity.current = { ...identity.current, localId: known.localId, localIdIsFallback: known.localIdIsFallback, category: known.category, entityKey: media.entityKey };
   }
   if (!media.localIdIsFallback) addUnique(identity.localIds, media.localId);
   if (documentId && !identity.entityKeys.some(alias => alias.documentId === documentId && alias.key === media.entityKey)) identity.entityKeys.push({ documentId, key: media.entityKey });
@@ -171,7 +181,7 @@ function reconcile(previous: Identity[], current: ObservedMedia[], documentId: s
     const owner = candidates.values().next().value as Identity | undefined;
     if (!owner) { extra.push(media); continue; }
     if (matched.has(owner)) throw new Error('MXP_MEDIA_IDENTITY_AMBIGUOUS: 多张图片对应同一历史身份，操作已停止。');
-    if (owner.current.category !== media.category) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 图片媒体类别发生变化，操作已停止。');
+    if (owner.current.category && media.category && owner.current.category !== media.category) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 图片媒体类别发生变化，操作已停止。');
     matched.set(owner, media);
   }
   if (matched.size !== previous.length) throw new Error('MXP_MEDIA_IDENTITY_AMBIGUOUS: 旧图片丢失或无法唯一对应，已停止后续上传。');
@@ -179,17 +189,22 @@ function reconcile(previous: Identity[], current: ObservedMedia[], documentId: s
 }
 
 function counts(snapshot: DraftSnapshot, media: ObservedMedia[]): { observed: number; bound: number; pending: number } {
-  return { observed: media.length, bound: media.filter(image => image.id && snapshot.saved?.media.includes(image.id)).length, pending: media.filter(image => !image.id).length };
+  return { observed: media.length, bound: media.filter(image => image.id && snapshot.saved?.media.includes(image.id)).length, pending: media.filter(image => !image.id || !image.localId || image.localIdIsFallback || !image.category).length };
 }
 
 function allReady(snapshot: DraftSnapshot, media: ObservedMedia[]): boolean {
-  return snapshot.saved !== null && media.every(image => image.id !== null && snapshot.saved?.media.includes(image.id));
+  return snapshot.saved !== null && media.every(image => image.id !== null && image.localId && !image.localIdIsFallback && image.category && snapshot.saved?.media.includes(image.id));
 }
 
-function remember(matched: Map<Identity, ObservedMedia>, snapshot: DraftSnapshot): void {
+function remember(matched: Map<Identity, ObservedMedia>, snapshot: DraftSnapshot): Map<ObservedMedia, ObservedMedia> {
   // Unique identity evidence is usable before saved metadata catches up. Binding
   // is still mandatory for confirmation and before the next native upload.
-  for (const [owner, image] of matched) observe(owner, image, snapshot.documentId);
+  const known = new Map<ObservedMedia, ObservedMedia>();
+  for (const [owner, image] of matched) {
+    observe(owner, image, snapshot.documentId);
+    known.set(image, knownMetadata(image, owner.current));
+  }
+  return known;
 }
 
 function readySignature(media: ObservedMedia[]): string {
@@ -201,6 +216,7 @@ function results(session: MediaUploadSession, assets: MediaAsset[]): MediaResult
   return assets.map(asset => {
     const found = session.confirmed?.filter(image => image.source === asset.source);
     if (found?.length !== 1 || !found[0]) throw new Error('已确认图片来源不完整，操作已停止。');
+    if (!found[0].current.localId || found[0].current.localIdIsFallback || !found[0].current.category) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 图片的真实本地标识或媒体类别尚未就绪，不能保存正文。');
     return { source: asset.source, ...found[0].current };
   });
 }
@@ -226,7 +242,8 @@ async function settle(bridge: BrowserBridge, articleId: string, session: MediaUp
   if (!pending) return;
   const started = Date.now();
   let reportAt = started + REPORT_INTERVAL;
-  let stable: { signature: string; since: number; candidate: Identity } | undefined;
+  let stable: { signature: string; since: number } | undefined;
+  let metadataPending = false;
   const completed = session.confirmed?.filter(image => image.source !== undefined).length ?? 0;
   while (Date.now() - started < TIMEOUT) {
     const { snapshot, media } = await read(bridge, articleId, session, pending.uploadId, started + TIMEOUT, () => {
@@ -237,33 +254,43 @@ async function settle(bridge: BrowserBridge, articleId: string, session: MediaUp
     });
     const { matched, extra } = reconcile(pending.before, media, snapshot.documentId);
     if (extra.length > 1) throw new Error('MXP_MEDIA_IDENTITY_AMBIGUOUS: 上传期间出现额外图片，已停止后续上传。');
-    remember(matched, snapshot);
+    const known = remember(matched, snapshot);
     const next = extra[0];
-    if (next && allReady(snapshot, media)) {
-      const signature = readySignature(media);
+    if (next) {
+      if (pending.candidate) {
+        const matchedCandidate = reconcile([...pending.before, pending.candidate], media, snapshot.documentId).matched;
+        for (const [observed, resolved] of remember(matchedCandidate, snapshot)) known.set(observed, resolved);
+      } else if (next.id) {
+        pending.candidate = identity(next, snapshot.documentId, pending.source);
+      }
+    }
+    const resolved = media.map(image => known.get(image) ?? image);
+    metadataPending = resolved.some(image => image.id && (!image.localId || image.localIdIsFallback || !image.category));
+    if (next && pending.candidate && allReady(snapshot, resolved)) {
+      const signature = readySignature(resolved);
       if (stable?.signature === signature) {
-        observe(stable.candidate, next, snapshot.documentId);
         if (Date.now() - stable.since >= INTERVAL) {
-          session.confirmed = [...pending.before, stable.candidate];
+          session.confirmed = [...pending.before, pending.candidate];
           delete session.pending;
-          diagnostic('media_upload_confirmed', { completed: completed + 1, total, ...counts(snapshot, media) });
+          diagnostic('media_upload_confirmed', { completed: completed + 1, total, ...counts(snapshot, resolved) });
           return;
         }
       } else {
-        stable = { signature, since: Date.now(), candidate: identity(next, snapshot.documentId, pending.source) };
+        stable = { signature, since: Date.now() };
       }
     } else stable = undefined;
-    // A rejected callback does not prove the native upload failed to finish.
+    // A failed DOM handoff does not prove the upload failed to finish.
     // Return control once; an explicit continuation observes even rejected tokens.
-    if (snapshot.upload?.state === 'rejected' && !pending.interrupted) throw new Error('原生上传回调报告失败；上传可能仍在完成，请稍后继续核对。');
+    if (snapshot.upload?.state === 'rejected' && !pending.interrupted) throw new Error('图片提交操作报告失败；上传可能仍在完成，请稍后继续核对。');
     if (Date.now() >= reportAt) {
-      const count = counts(snapshot, media);
+      const count = counts(snapshot, resolved);
       progress(`图片上传仍在等待：已确认 ${completed}/${total}，当前图片 ${count.observed}，已绑定 ${count.bound}。`);
-      diagnostic('media_upload_waiting', { completed, total, ...count, state: snapshot.upload?.state ?? 'unknown', elapsedSeconds: Math.floor((Date.now() - started) / 1000) });
+      diagnostic('media_upload_waiting', { completed, total, ...count, state: metadataPending ? 'metadata_pending' : snapshot.upload?.state ?? 'unknown', elapsedSeconds: Math.floor((Date.now() - started) / 1000) });
       reportAt = Date.now() + REPORT_INTERVAL;
     }
     await new Promise<void>(resolve => setTimeout(resolve, INTERVAL));
   }
+  if (metadataPending) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 图片的真实本地标识或媒体类别在 180 秒内仍未就绪，已保留进度；稍后继续不会重复上传。');
   throw new Error('MXP_MEDIA_UPLOAD_TIMEOUT: 图片上传等待超过 180 秒，已保留进度；稍后继续只会核对这张图片，不会重复上传。');
 }
 
@@ -296,22 +323,29 @@ export async function uploadArticleMedia(bridge: BrowserBridge, articleId: strin
       const confirmed = session.confirmed ?? [];
       const { matched, extra } = reconcile(confirmed, media, snapshot.documentId);
       if (extra.length) throw new Error('MXP_MEDIA_IDENTITY_AMBIGUOUS: 开始上传前出现额外图片，操作已停止。');
-      if (!allReady(snapshot, media)) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 旧图片尚未就绪或绑定，未开始下一张上传。');
-      remember(matched, snapshot);
+      const known = remember(matched, snapshot);
+      if (!allReady(snapshot, media.map(image => known.get(image) ?? image))) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 旧图片尚未就绪或绑定，未开始下一张上传。');
       const pending: PendingUpload = { uploadId: randomUUID(), source: asset.source, before: cloneIdentities(confirmed), interrupted: false };
       // Persist BEFORE the bridge call: a lost reply is an uncertain submission.
       session.pending = pending;
       const completed = confirmed.filter(image => image.source !== undefined).length;
       progress(`正在上传图片 ${completed + 1}/${assets.length}。`);
       diagnostic('media_upload_started', { completed, total: assets.length });
-      const response = await runPage<{ state: 'submitted' | 'rejected' | 'missing' }>(bridge, { kind: 'upload', id: articleId, uploadId: pending.uploadId, asset: { name: asset.name, mime: asset.mime, base64: asset.base64 } });
+      const response = await runPage<{ state: 'submitted' | 'rejected' | 'missing' } | { state: 'not-submitted'; reason: string }>(bridge, { kind: 'upload', id: articleId, uploadId: pending.uploadId, asset: { name: asset.name, mime: asset.mime, base64: asset.base64 } });
+      if (response.state === 'not-submitted') {
+        // Only this explicit page-side proof permits retrying the file. A thrown
+        // bridge call or an unknown reply still leaves submission uncertain.
+        delete session.pending;
+        const reason = typeof response.reason === 'string' && response.reason.trim() ? response.reason.trim() : 'X 图片入口尚未准备好。';
+        throw new Error(`图片尚未提交：${reason} 处理页面提示后可再次继续上传。`);
+      }
       if (response.state !== 'submitted') throw new Error('本次原生上传未得到确认，已保留进度；请稍后继续核对。');
       await settle(bridge, articleId, session, assets.length, progress, diagnostic);
     }
     const { snapshot, media } = await read(bridge, articleId, session);
     const { matched, extra } = reconcile(session.confirmed ?? [], media, snapshot.documentId);
-    if (extra.length || !allReady(snapshot, media)) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 上传结束时图片数量或保存绑定不一致，操作已停止。');
-    remember(matched, snapshot);
+    const known = remember(matched, snapshot);
+    if (extra.length || !allReady(snapshot, media.map(image => known.get(image) ?? image))) throw new Error('MXP_MEDIA_STATE_UNSTABLE: 上传结束时图片数量或保存绑定不一致，操作已停止。');
     session.result = results(session, assets);
     return session.result;
   } catch (error) {

@@ -5,7 +5,7 @@ import { uploadArticleMedia, type MediaUploadSession } from '../src/browser/medi
 import { PageChangedError, ResumeRejectedError, type PageAction } from '../src/browser/x-page';
 import type { DraftSnapshot } from '../src/browser/x-protocol';
 
-interface Image { id?: string; key: string; localId?: string; category?: string; snake?: boolean; }
+interface Image { id?: string; key: string; localId?: string | number | null; category?: string | null; snake?: boolean; }
 interface Clock { now(): number; advance(milliseconds: number): void; }
 function clock(t: TestContext): Clock {
   let now = 0;
@@ -23,11 +23,17 @@ function draft(images: Image[], text = 'Private article body', middleBlank = fal
       ...images.map((image, index) => ({ key: `block-${index}`, type: 'atomic', text: ' ', data: {}, entity_ranges: [{ key: image.key, offset: 0, length: 1 }], inline_style_ranges: [] })),
       paragraph('caret', ''),
     ],
-    entity_map: images.map(image => ({ key: image.key, value: { type: 'MEDIA', mutability: 'IMMUTABLE', data: image.snake ? {
-      media_items: [{ media_id: image.id, ...(image.localId === undefined ? {} : { local_media_id: image.localId }), media_category: image.category ?? 'DraftTweetImage' }],
-    } : {
-      mediaItems: [{ mediaId: image.id, ...(image.localId === undefined ? {} : { localMediaId: image.localId }), mediaCategory: image.category ?? 'DraftTweetImage' }],
-    } } })),
+    entity_map: images.map(image => {
+      // A normal native observation carries these fields; null models hydration
+      // that has not supplied them, rather than relying on production defaults.
+      const localId = image.localId === null ? undefined : image.localId ?? `fixture-local-${image.key}`;
+      const category = image.category === null ? undefined : image.category ?? 'DraftTweetImage';
+      return { key: image.key, value: { type: 'MEDIA', mutability: 'IMMUTABLE', data: image.snake ? {
+        media_items: [{ media_id: image.id, ...(localId === undefined ? {} : { local_media_id: localId }), ...(category === undefined ? {} : { media_category: category }) }],
+      } : {
+        mediaItems: [{ mediaId: image.id, ...(localId === undefined ? {} : { localMediaId: localId }), ...(category === undefined ? {} : { mediaCategory: category }) }],
+      } } };
+    }),
   };
 }
 
@@ -36,6 +42,7 @@ function assets(count = 3): MediaAsset[] {
 }
 
 class NativePage implements BrowserBridge {
+  readonly attempts: string[] = [];
   readonly uploads: Array<{ id: string; asset: Pick<MediaAsset, 'name' | 'mime' | 'base64'>; at: number }> = [];
   readonly tokens = new Map<string, 'submitted' | 'rejected'>();
   images: Image[] = [];
@@ -48,6 +55,7 @@ class NativePage implements BrowserBridge {
   reads = 0;
   uploadReads = 0;
   beforeRead?: (page: NativePage, action: Extract<PageAction, { kind: 'read' }>) => void;
+  preflight?: (page: NativePage) => { state: string; reason?: string } | undefined;
   onUpload?: (page: NativePage, action: Extract<PageAction, { kind: 'upload' }>) => void | 'drop' | 'reject';
   constructor(readonly time: Clock, readonly session: MediaUploadSession) {}
   async evaluate<T>(expression: string): Promise<T> {
@@ -57,7 +65,10 @@ class NativePage implements BrowserBridge {
     if (action.kind === 'upload') {
       assert.equal(this.session.pending?.uploadId, action.uploadId, 'pending must be saved before submitting to the browser');
       assert.equal(action.id, this.articleId);
+      this.attempts.push(action.uploadId);
       if (!this.tokens.has(action.uploadId)) {
+        const prevented = this.preflight?.(this);
+        if (prevented) return prevented as T;
         this.tokens.set(action.uploadId, 'submitted');
         this.uploads.push({ id: action.uploadId, asset: action.asset, at: this.time.now() });
         this.uploadReads = 0;
@@ -124,15 +135,16 @@ test('identity aliases survive repeated ID and local-ID promotions while saved b
   assert.equal(page.uploads.length, 2);
 });
 
-test('missing local IDs use an explicitly untrusted fallback and same-document entity identity can promote an ID', async t => {
+test('uniquely identified old images retain observed metadata while missing fields and same-document IDs hydrate', async t => {
   const { page, run } = setup(t, 2);
   page.onUpload = state => {
-    state.images.push({ id: `native-${state.uploads.length}`, key: `key-${state.uploads.length}` });
-    if (state.uploads.length === 2) state.images[0]!.id = 'promoted-with-key';
+    state.images.push({ id: `native-${state.uploads.length}`, key: `key-${state.uploads.length}`, localId: `native-local-${state.uploads.length}`, category: 'ObservedArticleImage' });
+    if (state.uploads.length === 2) Object.assign(state.images[0]!, { id: 'promoted-with-key', localId: null, category: null });
   };
   const result = await run();
   assert.equal(result[0]?.id, 'promoted-with-key');
-  assert.ok(result.every(image => image.localId === '1' && image.localIdIsFallback === true));
+  assert.equal(result[0]?.localId, 'native-local-1');
+  assert.ok(result.every(image => image.category === 'ObservedArticleImage' && image.localIdIsFallback === false));
 });
 
 test('losing an old image prevents the next submission even when a new image appears', async t => {
@@ -187,6 +199,69 @@ test('saved-media binding and native readiness must settle before the next file 
   assert.ok(page.uploads[1]!.at >= 3000, 'second upload waits for native ID, saved binding, and two stable reads');
 });
 
+test('new-image metadata can arrive across different snapshots without inventing either field', async t => {
+  const { page, run } = setup(t, 2);
+  page.onUpload = state => {
+    state.images.push({ id: `media-${state.uploads.length}`, key: `key-${state.uploads.length}`, localId: state.uploads.length + 1, category: state.uploads.length === 1 ? null : 'ObservedArticleImage' });
+  };
+  page.beforeRead = state => {
+    if (state.uploads.length === 1 && state.uploadReads >= 3) {
+      state.images[0]!.localId = null;
+      state.images[0]!.category = 'ObservedArticleImage';
+    }
+  };
+  const result = await run();
+  assert.ok(page.uploads[1]!.at >= 1500, 'the next file waits until both fields have been observed and confirmed stable');
+  assert.equal(result[0]?.localId, '2');
+  assert.equal(result[0]?.category, 'ObservedArticleImage');
+  assert.equal(result[0]?.localIdIsFallback, false);
+});
+
+for (const field of ['localId', 'category'] as const) {
+  test(`missing native ${field} times out without the next upload and resumes when the real value arrives`, async t => {
+    const { page, run, session, time, events } = setup(t, 2);
+    page.onUpload = state => {
+      state.images.push({ id: `media-${state.uploads.length}`, key: `key-${state.uploads.length}`, localId: `native-local-${state.uploads.length}`, category: 'ObservedArticleImage' });
+      if (state.uploads.length === 1) state.images[0]![field] = null;
+    };
+    await assert.rejects(run(), /MXP_MEDIA_STATE_UNSTABLE.*180 秒/);
+    assert.equal(time.now(), 180_000);
+    assert.equal(page.uploads.length, 1);
+    assert.ok(session.pending);
+    assert.equal(session.result, undefined);
+    assert.equal(session.pending.candidate?.current[field], '');
+    assert.ok(events.some(event => event.details?.state === 'metadata_pending' && event.details.pending === 1));
+    page.images[0]![field] = field === 'localId' ? 'native-local-1' : 'ObservedArticleImage';
+    const result = await run();
+    assert.equal(page.uploads.length, 2);
+    assert.equal(result[0]?.localId, 'native-local-1');
+    assert.equal(result[0]?.category, 'ObservedArticleImage');
+    assert.ok(result.every(image => image.localIdIsFallback === false));
+  });
+}
+
+test('a partially observed pending image cannot be replaced by an unrelated image after metadata timeout', async t => {
+  const { page, run, session } = setup(t, 1);
+  page.onUpload = state => { state.images = [{ id: 'original-id', key: 'original-key', localId: null, category: 'ObservedArticleImage' }]; };
+  await assert.rejects(run(), /MXP_MEDIA_STATE_UNSTABLE/);
+  const token = session.pending?.uploadId;
+  page.documentId = 'reloaded';
+  page.images = [{ id: 'unrelated-id', key: 'unrelated-key', localId: 'unrelated-local', category: 'ObservedArticleImage' }];
+  await assert.rejects(run(), /MXP_MEDIA_IDENTITY_AMBIGUOUS/);
+  assert.equal(session.pending?.uploadId, token);
+  assert.equal(page.uploads.length, 1);
+});
+
+test('observed category conflicts still stop before a later file can be submitted', async t => {
+  const { page, run } = setup(t, 3);
+  page.onUpload = state => {
+    state.images.push({ id: `media-${state.uploads.length}`, key: `key-${state.uploads.length}`, localId: `native-local-${state.uploads.length}`, category: 'ObservedArticleImage' });
+    if (state.uploads.length === 2) state.images[0]!.category = 'DifferentNativeCategory';
+  };
+  await assert.rejects(run(), /MXP_MEDIA_STATE_UNSTABLE.*媒体类别发生变化/);
+  assert.equal(page.uploads.length, 2);
+});
+
 test('timeout retains the pending upload; a late success is claimed once on explicit continuation', async t => {
   const { page, run, time, session } = setup(t, 2);
   let allowFirst = false;
@@ -202,6 +277,62 @@ test('timeout retains the pending upload; a late success is claimed once on expl
   assert.deepEqual(result.map(image => image.id), ['late-first', 'second']);
   assert.equal(page.uploads.length, 2);
   assert.equal(page.uploads.filter(upload => upload.id === pendingId).length, 1);
+});
+
+test('explicit not-submitted response clears pending and retries the file after the DOM blocker is resolved', async t => {
+  const { page, run, session, time } = setup(t, 2);
+  page.preflight = () => ({ state: 'not-submitted', reason: '请先关闭已有弹窗。' });
+  await assert.rejects(run(), /图片尚未提交.*请先关闭已有弹窗.*再次继续上传/);
+  assert.equal(session.pending, undefined);
+  assert.equal(page.uploads.length, 0);
+  assert.equal(page.tokens.size, 0);
+  assert.equal(time.now(), 0, 'a proven pre-submission failure must not wait for an impossible upload');
+  const preventedToken = page.attempts[0];
+  page.preflight = undefined;
+  assert.equal((await run()).length, 2);
+  assert.equal(page.attempts.length, 3);
+  assert.equal(page.uploads.length, 2);
+  assert.ok(page.uploads.every(upload => upload.id !== preventedToken));
+});
+
+test('not-submitted on a later file preserves confirmed images and resumes from that file', async t => {
+  const { page, run, session, files } = setup(t, 3);
+  page.preflight = state => state.uploads.length === 1 ? { state: 'not-submitted', reason: '正文媒体菜单尚未就绪。' } : undefined;
+  await assert.rejects(run(), /图片尚未提交/);
+  assert.equal(session.pending, undefined);
+  assert.equal(session.confirmed?.length, 1);
+  assert.equal(page.uploads.length, 1);
+  page.preflight = undefined;
+  assert.equal((await run()).length, 3);
+  assert.deepEqual(page.uploads.map(upload => upload.asset.name), files.map(file => file.name));
+  assert.equal(page.attempts.length, 4);
+});
+
+test('an unknown submission response retains pending and never becomes permission to retransmit', async t => {
+  const { page, run, session, time } = setup(t, 1);
+  page.preflight = () => ({ state: 'unknown' });
+  await assert.rejects(run(), /未得到确认/);
+  const token = session.pending?.uploadId;
+  assert.ok(token);
+  page.preflight = undefined;
+  await assert.rejects(run(), /MXP_MEDIA_UPLOAD_TIMEOUT/);
+  assert.equal(time.now(), 180_000);
+  assert.equal(session.pending?.uploadId, token);
+  assert.equal(page.attempts.length, 1);
+  assert.equal(page.uploads.length, 0);
+});
+
+test('a thrown bridge error saying not-submitted does not count as explicit proof', async t => {
+  const { page, run, session } = setup(t, 1);
+  page.preflight = () => { throw new Error('not-submitted: response transport failed'); };
+  await assert.rejects(run(), /response transport failed/);
+  const token = session.pending?.uploadId;
+  assert.ok(token);
+  page.preflight = undefined;
+  await assert.rejects(run(), /MXP_MEDIA_UPLOAD_TIMEOUT/);
+  assert.equal(session.pending?.uploadId, token);
+  assert.equal(page.attempts.length, 1);
+  assert.equal(page.uploads.length, 0);
 });
 
 test('a dropped submission reply never causes repeated transmission, even across several continuations and a reload', async t => {
@@ -221,7 +352,7 @@ test('a dropped submission reply never causes repeated transmission, even across
   assert.equal(page.uploads.length, 1);
 });
 
-test('a rejected native callback can still finish later and is observed without retransmission', async t => {
+test('a rejected file handoff can still finish later and is observed without retransmission', async t => {
   const { page, run, time } = setup(t, 1);
   page.onUpload = () => 'reject';
   await assert.rejects(run(), /未得到确认/);
@@ -230,12 +361,12 @@ test('a rejected native callback can still finish later and is observed without 
   assert.equal(page.uploads.length, 1);
 });
 
-test('asynchronous rejection preserves the pending record and prevents the next file until explicit continuation', async t => {
+test('a reported handoff rejection preserves pending and prevents the next file until explicit continuation', async t => {
   const { page, run, session } = setup(t, 2);
   let reject = true;
   page.onUpload = state => { state.images.push({ id: `media-${state.uploads.length}`, localId: `local-${state.uploads.length}`, key: `key-${state.uploads.length}` }); };
   page.beforeRead = (state, action) => { if (reject && action.uploadId) state.tokens.set(action.uploadId, 'rejected'); };
-  await assert.rejects(run(), /回调报告失败/);
+  await assert.rejects(run(), /图片提交操作报告失败/);
   assert.ok(session.pending);
   assert.equal(page.uploads.length, 1);
   reject = false;
@@ -296,13 +427,13 @@ test('entity keys cannot stand in for lost stable identities after a document re
   const { page, run } = setup(t, 2);
   page.onUpload = state => {
     state.images.push({ id: `media-${state.uploads.length}`, key: `key-${state.uploads.length}` });
-    if (state.uploads.length === 2) { state.documentId = 'reloaded'; state.images[0]!.id = 'unknown-promoted'; }
+    if (state.uploads.length === 2) { state.documentId = 'reloaded'; state.images[0]!.id = 'unknown-promoted'; state.images[0]!.localId = null; }
   };
   await assert.rejects(run(), /旧图片丢失/);
   assert.equal(page.uploads.length, 2);
 });
 
-test('fallback local IDs are never an identity when the document token is unavailable', async t => {
+test('an unobserved local ID cannot replace lost identity when the document token is unavailable', async t => {
   const { page, run } = setup(t, 2);
   page.documentId = undefined;
   page.onUpload = state => {
