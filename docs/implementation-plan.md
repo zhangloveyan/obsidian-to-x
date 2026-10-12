@@ -1,6 +1,6 @@
 # Architecture and implementation
 
-Current version: **0.1.11**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
+Current version: **0.1.12**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
 
 ## Product scope
 

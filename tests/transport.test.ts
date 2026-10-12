@@ -23,6 +23,8 @@ for (const persistent of [false, true]) test(`SDK transport closes a ${persisten
     module: { exports: {} }, require: createRequire(import.meta.url), process, Buffer, console,
     setTimeout: browserSetTimeout, clearTimeout: browserClearTimeout,
   });
+  // Match Node's global alias without sharing the host's global object.
+  runInContext('globalThis.global = globalThis;', context);
   runInContext(bundle.outputFiles[0]!.text, context);
   const Transport = context.module.exports.StdioClientTransport;
   const source = persistent ? 'process.stdin.resume(); setInterval(() => {}, 60000)' : 'process.stdin.resume()';

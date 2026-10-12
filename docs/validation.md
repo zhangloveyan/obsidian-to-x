@@ -1,10 +1,12 @@
 # Verification record
 
-Version: **0.1.11**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.12**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
 `npm run package` passed TypeScript, the production build, whole-project ESLint and **157 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+
+The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplies that alias inside each VM, preserving isolation from the host global object. The affected tests still exercise real SDK child-process behavior. This release also provides an English README with a separate Chinese translation; it changes no application source or save/reload behavior from 0.1.11.
 
 The current test suite covers:
 
@@ -18,11 +20,11 @@ The native page adapter was also extracted from an in-memory production bundle a
 
 ## Installed artifacts
 
-The five packaged files were copied into the user's existing Obsidian plugin directory. A subsequent SHA-256 comparison confirmed that all five installed files match `dist/markdown-x-publisher/`. The installed manifest identifies version 0.1.11. Local machine paths and account-specific draft links are intentionally omitted from this public record.
+The 0.1.11 package was installed and its five files verified by SHA-256 before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
 
 ## User-run diagnostic evidence
 
-The installed plugin's `logs/latest.log` records a real user save starting at **2026-10-12 03:55:32.661 UTC** and reaching `operation.completed` at **03:57:49.292 UTC**, with a recorded elapsed time of **136,630 ms**.
+The installed 0.1.11 plugin's `logs/latest.log` records a real user save starting at **2026-10-12 03:55:32.661 UTC** and reaching `operation.completed` at **03:57:49.292 UTC**, with a recorded elapsed time of **136,630 ms**.
 
 The diagnostic record shows:
 
@@ -37,7 +39,7 @@ This is evidence that the user's installed version completed its real save and i
 
 ## Verified scope and remaining limits
 
-Automated checks exercise body-image cover reuse, independent covers, repeated images, interruption recovery and formatting preservation. The user-run log does not establish that every one of those cases occurred in that run. No full visual acceptance matrix has been recorded for 0.1.11, including all supported formatting, live interruption/continuation, closed-Chrome startup, remote image retrieval and display variations.
+Automated checks exercise body-image cover reuse, independent covers, repeated images, interruption recovery and formatting preservation. The user-run log does not establish that every one of those cases occurred in that run. No full visual acceptance matrix has been recorded for this application source, including all supported formatting, live interruption/continuation, closed-Chrome startup, remote image retrieval and display variations. No additional X draft was created for the documentation and test-fixture changes in 0.1.12.
 
 X editor internals and web operations can change independently of the plugin. Users still need an eligible X account and must review the saved draft before publishing. The plugin saves drafts only. Continuation state is held in memory and is lost when the dialog closes or Obsidian restarts. Complex Markdown and Obsidian extension syntax remain subject to the format limits in the [README](../README.md).
 

@@ -79,6 +79,8 @@ test('production runtime records the real SDK buffer error without logging its p
       return require(name);
     },
   });
+  // Bundled Node dependencies expect this alias to belong to their VM realm.
+  runInContext('globalThis.global = globalThis;', context);
   runInContext(bundle.outputFiles[0]!.text, context);
   const connect = context.module.exports.connectBrowser as (settings: ConnectionSettings, diagnostic: DiagnosticSink) => Promise<BrowserBridge>;
   const events: Array<{ event: string; details?: Parameters<DiagnosticSink>[1] }> = [];

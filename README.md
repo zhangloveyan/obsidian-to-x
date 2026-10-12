@@ -1,139 +1,143 @@
 # Markdown X Publisher
 
-Preview Markdown notes in Obsidian and save them as X Article drafts using your existing Chrome session. Desktop only. Built by Ancle; licensed under AGPL-3.0-only.
+[简体中文](README.zh-CN.md)
 
-在 Obsidian 中预览笔记，确认标题和封面，然后保存到 X 长文章草稿箱。保留你日常 Chrome 的用户配置和 X 登录状态；公开发布由你在 X 中完成。
+Preview Markdown notes in Obsidian, review the title and cover, and save them as X Article drafts using your existing Chrome profile and X login. You publish manually in X. Desktop only. Built by Ancle; licensed under AGPL-3.0-only.
 
-## 使用条件
+## Requirements
 
-- 桌面版 Obsidian **1.11.7 或更新版本**。不支持手机和平板客户端。
-- 日常使用的 Google Chrome，以及安装在同一用户配置中的[官方 Playwright 扩展](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
-- Node.js 18 或更新版本，建议使用仍受支持的 LTS 版本。
-- 用户自行安装的官方 `@playwright/mcp`。当前适配版本为 **0.0.83**。
-- 已登录 X，并且账号能在网页中创建 Articles 长文章。账户权限和订阅要求由 X 决定，参见 [X Articles 帮助](https://help.x.com/en/using-x/articles)。
+- Desktop Obsidian **1.11.7 or later**. Mobile and tablet clients are not supported.
+- Your regular Google Chrome profile with the [official Playwright extension](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md) installed.
+- Node.js 18 or later; a supported LTS version is recommended.
+- The official `@playwright/mcp`, installed by you. The currently supported version is **0.0.83**.
+- An X account signed in to that Chrome profile, with permission to create Articles. X controls account eligibility and subscription requirements; see [X Articles help](https://help.x.com/en/using-x/articles).
 
-插件本身免费，不要求 X Developer API key、模型 API key 或付费 MCP 服务。实现通过已登录的 X 网页保存草稿，使用的是网页兼容适配，**不是 X 官方开发者 API**。X 更新网页或内部数据格式时，适配可能需要更新；保存后应在 X 中检查排版。
+The plugin is free. It does not require an X Developer API key, a model API key, or a paid MCP service. It saves through the signed-in X website using a web compatibility adapter, **not the official X developer API**. Changes to X's website or internal data format may require plugin updates. Check the saved draft's layout in X.
 
-## 安装插件
+## Installation
 
-1. 从 [GitHub Releases](https://github.com/zhangloveyan/obsidian-to-x/releases) 下载 `markdown-x-publisher-<version>.zip`，解压后将 `markdown-x-publisher` 文件夹放入笔记库的 `.obsidian/plugins/`。
-2. 确认文件夹内直接包含 `main.js`、`manifest.json`、`styles.css`、`LICENSE` 和 `THIRD_PARTY_NOTICES.md`。
-3. 在 Obsidian 中重新加载插件列表，并在「设置 → 第三方插件」启用 **Markdown X Publisher**。
+1. Download `markdown-x-publisher-<version>.zip` from [GitHub Releases](https://github.com/zhangloveyan/obsidian-to-x/releases). Extract it and place the `markdown-x-publisher` folder in your vault's `.obsidian/plugins/` directory.
+2. Confirm that the folder directly contains `main.js`, `manifest.json`, `styles.css`, `LICENSE`, and `THIRD_PARTY_NOTICES.md`.
+3. Reload the plugin list in Obsidian, then enable **Markdown X Publisher** under **Settings → Community plugins**.
 
-源码开发者可运行 `npm ci` 和 `npm run package`，使用生成的 `dist/markdown-x-publisher/`。社区目录是否收录，以实际审核结果为准。
+To build from source, run `npm ci` followed by `npm run package` and use `dist/markdown-x-publisher/`. Availability in the community directory depends on Obsidian's review.
 
-## 首次连接配置
+## First-time setup
 
-### 1. 安装 Node.js 和 MCP
+### 1. Install Node.js and MCP
 
-从 [Node.js 官网](https://nodejs.org/en/download)安装 Node.js。然后由你在自己的终端运行：
+Install Node.js from the [official website](https://nodejs.org/en/download), then run this command yourself in a terminal:
 
 ```sh
 npm install -g @playwright/mcp@0.0.83
 ```
 
-已经安装的组件可以跳过。打开插件设置时，插件会自动查找本机已有的 Node.js 和官方 MCP，并显示检测结果与版本。安装完成后点击 **重新检测**；刚安装 Node.js 仍未检测到时，请重新启动 Obsidian，让它读取更新后的环境变量。
+Skip components you already have. When you open the plugin settings, the plugin detects installed Node.js and official MCP programs and displays their status and versions. After installation, click **Re-detect (重新检测)**. If a newly installed Node.js is still missing, restart Obsidian so it can read the updated environment.
 
-正常使用无需填写路径。只有特殊安装位置未被识别，或需要指定某个版本时，才展开 **高级设置：手动指定程序路径**：
+Paths are normally detected automatically. For an unusual installation location or a specific version, expand **Advanced: manually specify program paths (高级设置：手动指定程序路径)**:
 
-- **Node.js 路径**：可选，填写 `node` 或 `node.exe` 的完整路径。
-- **Playwright MCP 路径**：可选，填写官方 `@playwright/mcp/cli.js` 的完整路径。
+- **Node.js path (Node.js 路径)**: optionally enter the full path to `node` or `node.exe`.
+- **Playwright MCP path (Playwright MCP 路径)**: optionally enter the full path to the official `@playwright/mcp/cli.js`.
 
-两项留空即自动检测。测试连接和保存文章也会自动查找，无需先把检测出来的路径填回设置。手动配置不正确时会提示修正，不会悄悄换用另一份程序。
+Leave both fields empty for automatic detection. Connection tests and saves also detect these programs; you do not need to copy detected paths into settings. Invalid manual paths produce an error rather than silently selecting another program.
 
-插件只运行你已安装的程序，不执行 `npm install`、`npx`，也不会安装或更新自己、MCP 或浏览器扩展。
+The plugin only runs programs you have installed. It does not run `npm install` or `npx`, or install or update itself, MCP, or the browser extension.
 
-### 2. 配置日常 Chrome
+### 2. Configure your regular Chrome profile
 
-按照[官方扩展说明](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)，在日常 Chrome 安装 Playwright 扩展。在同一用户配置中登录 X，并确认网页提供新建长文章入口。
+Follow the [official extension instructions](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md). Sign in to X in the same Chrome profile and confirm that the website offers the option to create an Article.
 
-连接始终使用 Chrome 扩展模式，不建立独立浏览器配置，不要求开启 Chrome 远程调试端口。Chrome 未运行时，官方连接流程可能启动 Chrome；它仍使用日常配置。
+Connections always use Chrome extension mode. The plugin does not create a separate browser profile or require Chrome's remote debugging port. The official connection flow may launch Chrome if it is closed, using your regular profile.
 
-### 3. 保存一次连接凭据
+### 3. Save the connection credential
 
-1. 打开 Chrome 中 Playwright 扩展的状态页。
-2. 复制其中的 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 值，也可以复制完整的 `PLAYWRIGHT_MCP_EXTENSION_TOKEN=...` 文本。
-3. 在插件设置的 **浏览器连接凭据** 中，通过 Obsidian 密钥组件新建一个密钥、粘贴内容并选择该密钥。
-4. 点击 **测试连接**。测试只检查浏览器连接，不创建文章。
+1. Open the Playwright extension's status page in Chrome.
+2. Copy its `PLAYWRIGHT_MCP_EXTENSION_TOKEN` value. The complete `PLAYWRIGHT_MCP_EXTENSION_TOKEN=...` text is also accepted.
+3. In **Browser connection credential (浏览器连接凭据)** in the plugin settings, use Obsidian's secret control to create a secret, paste the value, and select that secret.
+4. Click **Test connection (测试连接)**. This checks the browser connection without creating an article.
 
-token 由 Obsidian `SecretStorage` 管理；插件配置只记录密钥名称，不把 token 写入插件的 `data.json`，也不需要创建凭据文本文件。有效 token 配置好后，后续连接无需反复点击 Allow。首次连接、插件重新加载或连接失效重连时，扩展仍可能短暂显示连接页，然后自动继续；这是[官方支持的自动连接方式](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md#bypassing-the-connection-approval-dialog)。测试连接与连续保存共用同一个 MCP 连接，保存成功后保留它，后续保存复用该连接中的 X 标签页。
+Obsidian `SecretStorage` manages the token. Plugin preferences store only the secret name, not the token in `data.json`; no credential text file is needed. After a valid token is configured, later connections do not require repeated Allow clicks. The extension may briefly show its connection page on the first connection, after a plugin reload, or when reconnecting. It then continues automatically using the [official automatic connection mechanism](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md#bypassing-the-connection-approval-dialog).
 
-凭据属于特定 Chrome 用户配置。如果更换配置、重置扩展 token 或清除扩展数据，需要重新保存凭据。X 登录失效时仍需在网页重新登录。
+Connection tests and consecutive saves share one MCP connection. Successful saves retain it and reuse its controlled X tab. The credential belongs to a particular Chrome profile: save it again after switching profiles, resetting the extension token, or clearing extension data. If the X login expires, sign in again on the website.
 
-## 保存文章
+## Save an article
 
-1. 打开要发送的 Markdown 笔记。
-2. 点击侧栏 **X 图标**，或运行命令 **预览 X 文章**。X 预览页签和文件右键菜单也使用同一标识。
-3. 在预览中检查内容，点击保存按钮。
-4. 在弹窗中修改标题，点击 **选择封面**。在 **文章图片** 标签中点选缩略图，或切换到 **本地图片**，从电脑任意目录选择一张图片。点击 **确认** 后进入 **编辑媒体**：拖动图片调整位置，用底部滑杆缩放，裁剪框固定为 **5:2**。点击 **应用** 更新封面预览，或点击返回重新选图；也可不设置或清除封面。
-5. 点击 **保存到草稿**，等待上传、保存和重新载入核对完成。
-6. 在 X 中打开草稿，确认后再手动发布。
+1. Open the Markdown note you want to send.
+2. Click the **X ribbon icon**, or run **Preview X article (预览 X 文章)**. The preview tab and file context menu use the same icon.
+3. Review the preview and click its save button.
+4. Edit the title in the dialog and click **Select cover (选择封面)**. Choose a thumbnail under **Article images (文章图片)**, or use **Local images (本地图片)** to select an image anywhere on your computer. Click **Confirm (确认)** to open **Edit media (编辑媒体)**. Drag the image and use the zoom slider inside the fixed **5:2** crop frame. Click **Apply (应用)** to update the cover preview, or go back to choose another image. A cover is optional and can be cleared.
+5. Click **Save to draft (保存到草稿)** and wait for upload, saving, and reload verification to finish.
+6. Open the draft in X, review it, and publish manually when ready.
 
-连续保存使用同一个受控 X 标签页，每次仍新建一篇草稿。官方 MCP 只列出当前连接控制的标签页，不会自动接管 Chrome 中其他已有页面；Obsidian 重启、插件重载或连接中断后，首次保存仍可能创建一个新的 X 标签页。
+You can also run **Save to X draft (保存到 X 草稿)** or use a Markdown file's context menu. Title and cover changes apply only to this draft and do not modify the source note. A selected local cover stays in memory: selecting or cancelling it does not upload it or copy it into the vault. Upload starts only after the final **Save to draft** action. Success notices disappear automatically; no permanent banner covers the top of X.
 
-也可运行 **保存到 X 草稿** 命令，或使用 Markdown 文件的右键菜单。标题、封面弹窗中的改动只用于本次草稿，不改写原笔记。本地封面暂存在内存中，选择或取消时不会上传，也不会复制到笔记库；只有最终点击 **保存到草稿** 才上传。成功通知自动消失，不在 X 顶部放置常驻遮挡条。
+Consecutive saves reuse the controlled X tab but create a new draft each time. Official MCP lists only tabs controlled by its current connection and does not automatically take over other Chrome tabs. The first save after restarting Obsidian, reloading the plugin, or losing the connection may create a new X tab.
 
-可选 Frontmatter：
+### Note metadata and cover cropping
+
+Optional frontmatter:
 
 ```yaml
 ---
-title: 我的文章标题
+title: My article title
 cover: attachments/cover.png
 ---
 ```
 
-标题优先取 `title`，否则取正文第一个一级标题，再否则取文件名。作为文章标题使用的一级标题会从本次上传正文中移除。封面读取 `cover`，也可在保存弹窗重新选择。
+The title comes from `title`, then the first top-level H1, then the filename. An H1 used as the article title is removed from the uploaded body. The `cover` value provides the initial cover selection; you can change it in the save dialog.
 
-封面支持 **重新裁剪**，在本次弹窗中保留原图和上次裁剪位置。GIF／动态 WebP 取首帧，裁剪结果为独立的 5:2 PNG，最大宽度 2560 像素；正文图片和原文件保持原样。Frontmatter 中预设的封面保存前同样需要完成裁剪。裁剪结果只暂存在本次弹窗中，关闭后不会写回笔记或保留到下次。
+**Re-crop (重新裁剪)** retains the original image and crop position for the current dialog session. GIF and animated WebP covers use their first frame. Cropping exports a separate 5:2 PNG up to 2560 pixels wide, leaving body images and source files unchanged. A frontmatter cover also needs cropping before saving. Crop results stay in memory and are neither written back to the note nor retained after the dialog closes.
 
-预览和上传共用同一份转换结果。代码以外的 Obsidian `%% 注释 %%` 和 HTML 注释会被剔除，不上传隐藏的写作备注；代码中的字面注释原样保留。未闭合或无法可靠识别的注释会明确报错。
+Preview and upload use the same conversion result. Obsidian `%% comments %%` and HTML comments outside code are removed so hidden writing notes are not uploaded. Literal comment markers inside code are preserved. Unclosed or ambiguous comments produce an explicit error.
 
-如果操作中途失败且已取得保存进度，弹窗会显示 **继续当前草稿**。保持保存弹窗及对应 X 草稿页打开，点击后会核对当前请求、草稿和已有内容，复用已确认上传的图片并继续后续步骤。已经提交但尚未确认结束的图片只继续等待，不重复发送文件。进度只保存在当前保存窗口的内存中；关闭窗口或重启 Obsidian 后不会恢复。正文或图片已修改、页面切到其他草稿时会停止，以免覆盖错误的内容。插件不会把“请求发出”当作保存成功。
+### Continue an interrupted save
 
-### 图片保存与问题日志
+If a save fails after progress has been captured, the dialog offers **Continue current draft (继续当前草稿)**. Keep the dialog and corresponding X draft open. Continuation checks the request, draft, and existing content, reuses confirmed uploads, and continues the remaining steps. A submitted but unconfirmed image is observed without sending the file again.
 
-有图片的文章先保存不含图片的正文，并刷新核对内容；随后通过 X 网页原生上传流程逐张上传图片。全部上传完成后，再刷新核对媒体，将图片按原笔记顺序写入完整正文，保存标题和封面，最后刷新核对整个草稿。正文先出现；图片的数量、大小和网络速度都会影响耗时。
+Progress lives only in the current dialog's memory. Closing the dialog or restarting Obsidian discards it. Changes to the body, images, or current draft page stop continuation to protect existing content. Sending a request is never treated as proof of a successful save.
 
-每次上传和检查都会重新读取当前编辑器，通过已确认的媒体标识持续识别旧图。逐张上传期间只检查上传结果；确认所有旧图身份唯一、恰好新增一张图片、没有待处理上传、全部图片已绑定到草稿且连续检查结果稳定后，才处理下一张。图片身份仍无法确定时明确报错，不按显示顺序猜配对；同一张图片兼作封面时保留正文中的图片。
+### Image uploads and problem logs
 
-保存弹窗或插件设置中的 **查看日志**，以及命令 **查看问题日志**，均可打开并复制最近一次操作的日志。日志包含各阶段、每张图片和浏览器操作的耗时、图片数量、请求数据大小以及失败类别。上传检查记录已就绪和待处理的图片数量，便于区分原生上传未结束与检测状态失效。保存过程中也可查看，点击 **刷新** 更新。
+Articles with media first save the body without images and reload to verify it. Images are then uploaded one at a time through X's native upload flow. After all uploads finish, the plugin reloads to reconcile media, saves the complete body in source order with the title and cover, and reloads again to verify the full draft. Text appears first; image count, size, and network speed affect completion time.
 
-日志仅保存在插件目录的 `logs/latest.log`，最多 128 KiB／1000 条，开始下一次保存或连接测试时会替换上一轮。它不记录文章正文、标题、文件路径、图片数据或连接凭据；旧版本未记录的失败无法事后补回。如果需要反馈问题，请在失败后先复制日志，再测试连接或重试。
+Each upload and check resolves the current editor and tracks previously confirmed media identities. The next upload starts only when earlier images remain uniquely identifiable, exactly one new image exists, no upload is pending, all images are bound to the saved draft, and repeated checks are stable. Ambiguous identities cause an error rather than a positional guess. Using a body image as the cover preserves its body occurrence.
 
-## 格式支持和边界
+Open **View log (查看日志)** in the save dialog or plugin settings, or run **View problem log (查看问题日志)** to view and copy the latest operation log. It includes stages, image and browser-operation timings, image counts, request sizes, and failure categories. Readiness counts help distinguish unfinished native uploads from state-detection problems. During a save, click **Refresh (刷新)** to update the display.
 
-| 内容 | 当前处理 |
+Logs are stored only in the plugin's `logs/latest.log`, limited to 128 KiB or 1000 entries. A new save or connection test replaces the previous log. Logs omit article text, titles, file paths, image data, and connection credentials. Past failures that were not logged cannot be reconstructed. Copy the log after a failure before testing the connection or retrying.
+
+## Supported content and limits
+
+| Content | Handling |
 | --- | --- |
-| 普通段落、中文、emoji、链接 | 转换为 X 文章文本 |
-| 粗体、斜体、删除线及组合 | 保留文字样式范围 |
-| 一级、二级正文标题 | 转换为 X 原生正文标题 |
-| 更深层级标题 | 折叠为 X 的第二级正文标题，预览同步折叠 |
-| 普通引用、无序列表、从 1 开始的简单有序列表 | 转换为 X 原生文本块 |
-| 嵌套列表、非 1 起始编号和复杂结构 | 保留原始 Markdown，不保证与 Obsidian 完全一致 |
-| 代码围栏、GFM 表格 | 保存为 X 的 Markdown 内容块 |
-| 正文图片、封面 | 上传 PNG、JPEG、GIF、WebP；单张图片在本插件中限制为 20 MB |
-| Obsidian 图片嵌入 | 支持 `![[图片.png]]`；自定义显示尺寸不保证保留 |
+| Paragraphs, Chinese text, emoji, links | Converted to X Article text |
+| Bold, italic, strikethrough, and combinations | Text style ranges preserved |
+| First- and second-level body headings | Converted to native X headings |
+| Deeper headings | Folded into X's second heading level in both preview and upload |
+| Simple quotes, unordered lists, ordered lists starting at 1 | Converted to native text blocks |
+| Nested lists, other starting numbers, complex structures | Original Markdown retained; rendering may differ from Obsidian |
+| Fenced code, GFM tables | Saved as X Markdown content blocks |
+| Body images and covers | PNG, JPEG, GIF, WebP; plugin limit of 20 MB per image |
+| Obsidian image embeds | `![[image.png]]` supported; custom display dimensions are not guaranteed |
 
-支持笔记库内图片和 HTTP(S) 图片链接；远程图片须能够直接下载。图片文件自身仍受 X 的格式、尺寸和账号限制。不支持自定义字体、文字颜色、任意字号、视频上传、多账号管理或自动公开发布。Dataview、任务插件、脚本、复杂 HTML 等扩展语法不保证在 X 中呈现为原效果。
+Vault images and directly downloadable HTTP(S) image URLs are supported. Images remain subject to X's own format, size, and account restrictions. Custom fonts, text colors, arbitrary font sizes, video uploads, multiple accounts, and automatic public posting are not supported. Dataview, task-plugin syntax, scripts, and complex HTML may not render as they do in Obsidian.
 
-复杂 Markdown 回退块中包含图片、标题中嵌入图片或原始 HTML 图片时，会明确提示调整排版，避免保存出缺失图片的文章。可把图片移到单独段落后再保存。
+Images inside unsupported Markdown structures, article titles, or raw HTML produce an explicit request to adjust the layout rather than silently saving an incomplete article. Move such images into separate paragraphs before saving.
 
-预览用于检查内容，不是 X 编辑器的像素级复制。最终保存后的 X 草稿是排版检查依据。
+The preview helps check content; it is not a pixel-exact copy of X's editor. Use the saved X draft to check final layout. See the [verification record](docs/validation.md) for the tested scope and remaining checks.
 
-本次版本的实际验证范围和待测项见[验收记录](docs/validation.md)。
+## Privacy and data access
 
-## 隐私与数据访问
+- No telemetry, advertising, remote configuration downloads, or model-service calls. The plugin does not collect vault content for training or analytics.
+- Only the note content, body images, and cover you choose to save are sent to X. Other notes are not uploaded in bulk. Chrome keeps your existing signed-in session; the plugin does not ask for your X password or API key.
+- Previewing or downloading HTTP(S) images contacts their source websites. Saving contacts X and its media services. Opening documentation or setup links visits the linked websites.
+- Runtime detection checks PATH, common Node/npm installation locations, nearby `node_modules`, and npm caches for official MCP. It may run installed Node/npm programs to query versions, global locations, and cache directories. It does not scan the entire disk or run installation commands.
+- Running local MCP reads the detected or manually configured Node/MCP program paths, MCP package metadata, and runtime dependencies. It launches a local subprocess and creates a system-temporary directory prefixed `markdown-x-publisher-`. MCP may write page snapshots, operation output, or diagnostic files there; these can contain information from the current article.
+- Obsidian APIs read the current note and its referenced vault images. The system file picker reads only the local cover you explicitly select. The plugin does not scan Chrome profile directories, extract browser credential files, or read other AI clients' settings.
+- The browser token is read from Obsidian's secret storage and passed only to the local MCP subprocess. It is excluded from logs and release packages. The official extension controls browser access; protect the token as a browser-access credential.
+- The local MCP connection stays available after successful saves or resumable failures so later operations can reuse its X tab. Disabling or uninstalling the plugin, changing connection settings, an unrecoverable failure, or reconnecting an invalid connection releases the old connection. This does not close Chrome or existing drafts. Later operations use the current connection settings.
 
-- 无遥测、广告、远程配置下载或模型服务调用。不收集笔记库用于训练或统计。
-- 只有你选择保存的笔记内容、正文图片和指定封面会发送给 X；不批量上传其他笔记。浏览器保留日常账号登录状态，插件不要求你提供 X 密码或 API key。
-- 预览或下载 HTTP(S) 图片时会访问图片来源网站；保存草稿时会访问 X 及其媒体服务。打开文档或安装说明链接时会访问对应网站。
-- 为自动检测运行环境，会检查 PATH、常用 Node/npm 安装位置、附近的 `node_modules` 和 npm 缓存中的官方 MCP；可能调用已安装的 Node/npm 查询版本、全局目录和缓存目录。不全盘扫描，也不执行安装命令。
-- 为运行本地 MCP，会读取已检测到或由你指定的 Node/MCP 程序路径、MCP 包信息及其运行依赖，启动本地子进程，并在系统临时目录建立 `markdown-x-publisher-` 开头的运行目录。MCP 可能在此写入网页快照、操作输出或诊断文件，这些内容可能包含当前文章信息。
-- 插件使用 Obsidian API 读取当前笔记及其引用的笔记库图片；本地封面通过系统文件选择器只读取你明确选择的文件。不会扫描 Chrome 用户目录、抓取浏览器凭据文件或读取其他 AI 客户端配置。
-- 浏览器连接 token 通过 Obsidian 密钥存储读取，只传给本地 MCP 子进程，不写入日志或发布包。官方扩展控制浏览器连接范围；此凭据应按浏览器访问凭据保管。
-- 保存成功或失败后仍有可续传进度时保留本地 MCP 连接，供后续操作复用 X 标签页。插件停用或卸载、连接配置变化、不可续传的失败或失效重连时释放旧连接；不关闭 Chrome 或已有草稿。再次操作时按当前连接设置连接。
-
-## 开发
+## Development
 
 ```sh
 npm ci
@@ -145,10 +149,12 @@ npm run check
 npm run package
 ```
 
-`check` 运行构建、类型检查、lint 和测试。`package` 生成可安装的 `dist/markdown-x-publisher/`。构建会根据 esbuild 的实际依赖输入生成 `THIRD_PARTY_NOTICES.md`，并把完整应用许可证和第三方许可证附入 `main.js`；这保证只下载标准三件插件文件时也带有许可声明。
+`check` runs the build, type checks, lint, and tests. `package` creates the installable `dist/markdown-x-publisher/`. The build generates `THIRD_PARTY_NOTICES.md` from esbuild's actual dependency inputs and appends the full application and dependency licenses to `main.js`, so standard three-file plugin downloads also include license notices.
 
-源码按 `src/content/`、`src/browser/`、`src/ui/` 分开组织。开发临时文件放 `work/`，正式发布文件放 `dist/`。发布步骤见 [发布说明](docs/releasing.md)。真实浏览器验证默认使用测试文章；复现用户故障时，仅在用户授权范围内使用指定文章并保存为草稿。
+Source is organized under `src/content/`, `src/browser/`, and `src/ui/`. Temporary development files belong in `work/`; release artifacts belong in `dist/`. See [release instructions](docs/releasing.md). Live browser verification uses test articles by default; reproducing a user issue uses a specified article only within that user's authorization and saves it as a draft.
 
-## 许可证
+## License
 
-Copyright © 2026 Ancle。项目使用 [GNU Affero General Public License v3.0 only](LICENSE)，标识为 `AGPL-3.0-only`。随包复用的开源依赖保持各自许可证，见 [第三方声明](THIRD_PARTY_NOTICES.md)。这是独立的社区项目，与 X、Obsidian 和 Microsoft 没有官方隶属关系。
+Copyright © 2026 Ancle. Licensed under the [GNU Affero General Public License v3.0 only](LICENSE), SPDX identifier `AGPL-3.0-only`. Bundled open-source dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
+This independent community project is not officially affiliated with X, Obsidian, or Microsoft.
