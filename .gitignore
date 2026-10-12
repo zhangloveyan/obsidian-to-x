@@ -1,0 +1,10 @@
+node_modules/
+main.js
+main.js.map
+dist/
+work/
+data.json
+.env
+.env.*
+*.log
+.DS_Store
