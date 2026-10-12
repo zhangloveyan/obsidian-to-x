@@ -68,18 +68,16 @@ async function pageProgram(action: Exclude<PageAction, { kind: 'create' }>): Pro
     const note = document.createElement('aside');
     note.id = 'markdown-x-publisher-status';
     note.setAttribute('role', 'status');
-    // eslint-disable-next-line obsidianmd/no-static-styles-assignment -- Runs inside X in Chrome, where Obsidian styles.css and DOM helpers are unavailable.
-    note.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:2147483647;max-width:320px;padding:14px 42px 14px 16px;border-radius:12px;background:Canvas;color:CanvasText;border:1px solid #8886;box-shadow:0 4px 18px #0002;font:14px/1.5 system-ui;';
+    note.popover = 'manual';
     note.textContent = '草稿已保存并核对，请检查后手动发布。';
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = '×';
     button.setAttribute('aria-label', '关闭草稿保存提示');
-    // eslint-disable-next-line obsidianmd/no-static-styles-assignment -- This close button belongs to the remote X page, not the Obsidian UI.
-    button.style.cssText = 'position:absolute;top:9px;right:9px;border:0;background:none;color:inherit;font-size:22px;cursor:pointer;';
     button.onclick = () => note.remove();
     note.append(button);
     document.body.append(note);
+    note.showPopover();
     setTimeout(() => note.remove(), 3000);
     return true;
   }

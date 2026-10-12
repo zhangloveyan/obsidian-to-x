@@ -1,6 +1,6 @@
 # Verification record
 
-Version: **0.1.17**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.18**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
@@ -14,6 +14,8 @@ Version 0.1.14 removes note-property publishing options and the bundled YAML par
 
 Version 0.1.15 replaces article creation heuristics with the observed visible, enabled `main button[aria-label="create"]` control. Image submission opens the editor's insert-media dialog and dispatches standard file-input events; it no longer invokes a React upload callback. Unknown local media IDs and categories remain missing until observed, or are inherited from a uniquely matched image whose real values were already recorded. Missing fields stop progression and preserve continuation state. A definite pre-submission failure is retryable; a lost response remains uncertain and cannot cause another file submission.
 
+Version 0.1.18 removes the two `obsidianmd/no-static-styles-assignment` exceptions rejected by community review. The optional X-page save notice now uses a native manual popover without assigning styles. Its appearance follows browser defaults; it remains dismissible and expires after three seconds. The upload and save-verification flow is unchanged. Existing review warnings, including the README language warning, are outside this fix.
+
 The current test suite covers:
 
 - Markdown parsing, hidden comments, UTF-16 formatting ranges, safe links, supported lists/headings and Markdown fallback blocks.
@@ -23,6 +25,10 @@ The current test suite covers:
 - Runtime discovery, connection lifetime, MCP transport failure classification, diagnostic privacy, preview behavior and cover selection/cropping.
 
 The page adapters were also extracted from in-memory production bundles and executed in isolated VMs. Checks confirm that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, the cover input is excluded, and navigation or editor replacement stops submission. Ambiguous, disabled or unsuitable dialog inputs are rejected. Removing a known pre-submission blocker allows the same token to be tried safely. These are local simulations, not live X UI tests.
+
+## Save notice verification
+
+For 0.1.18, a local Chromium page ran the production serialized notification with a synthetic X location. The native popover displayed readable text, retained the article input's focus and left the underlying page available. The close button removed it, repeated calls replaced the previous notice, an older timeout did not remove the replacement, and the replacement disappeared after three seconds. No live X draft was created or saved for this cosmetic change.
 
 ## Documentation verification
 

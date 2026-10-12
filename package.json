@@ -1,6 +1,6 @@
 {
   "name": "markdown-x-publisher",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Preview Markdown notes and save X Article drafts using your Chrome session.",
   "type": "module",
   "main": "main.js",
