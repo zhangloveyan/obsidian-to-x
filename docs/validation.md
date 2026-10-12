@@ -1,6 +1,6 @@
 # Verification record
 
-Version: **0.1.16**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.17**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
@@ -23,6 +23,12 @@ The current test suite covers:
 - Runtime discovery, connection lifetime, MCP transport failure classification, diagnostic privacy, preview behavior and cover selection/cropping.
 
 The page adapters were also extracted from in-memory production bundles and executed in isolated VMs. Checks confirm that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, the cover input is excluded, and navigation or editor replacement stops submission. Ambiguous, disabled or unsuitable dialog inputs are rejected. Removing a known pre-submission blocker allows the same token to be tried safely. These are local simulations, not live X UI tests.
+
+## Documentation verification
+
+Version 0.1.17 rewrites the Chinese and English READMEs with installation, setup, usage, format limits and troubleshooting instructions. Four shared images illustrate the workflow. The main image was captured in the actual Windows Obsidian 1.11.7 application with the installed 0.1.16 plugin, using a temporary synthetic article in the left editor and its plugin preview on the right. The three dialog images were captured from production UI components in a local demo host, not from the Obsidian application; the READMEs distinguish those sources. Temporary vault content was removed and the previous note and layout were restored.
+
+All relative README links and image paths were checked. The 0.1.17 package passed the same build, lint and 173-test gate. This release does not change application source or runtime behavior; creating or saving an X draft was not rerun for this documentation update.
 
 ## Live DOM upload verification
 
