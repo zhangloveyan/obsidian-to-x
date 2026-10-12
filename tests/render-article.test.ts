@@ -59,7 +59,7 @@ test('real text and its line breaks between images remain visible', async () => 
 
 test('formatted whitespace and missing-image diagnostics are not silently discarded', async () => {
   const root = new Element('article');
-  const note: ParsedNote = { title: 'Fixture', cover: '', body: '', blocks: [
+  const note: ParsedNote = { title: 'Fixture', body: '', blocks: [
     { type: 'text', kind: 'unstyled', text: ' ', styles: [{ style: 'Bold', offset: 0, length: 1 }], links: [] },
     { type: 'image', source: 'missing.png', alt: 'Missing' },
   ] };

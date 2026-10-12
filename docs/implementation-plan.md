@@ -1,6 +1,6 @@
 # Architecture and implementation
 
-Current version: **0.1.13**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
+Current version: **0.1.14**. Product: **Markdown X Publisher** (`markdown-x-publisher`), by Ancle.
 
 ## Product scope
 
@@ -46,7 +46,7 @@ Progress exists only while the save dialog remains open. Closing it or restartin
 
 ## Preview and cover handling
 
-Preview and upload share the parsed note model. The interface uses Obsidian theme colors and the plugin's X icon. The cover picker offers note images and a local-file tab; local files remain in memory until saving.
+Preview and upload share the parsed note model. A leading note-property block is excluded from article content; its values do not configure publishing. The first top-level H1 supplies the initial title, with the filename as fallback. The save dialog starts without a cover. The interface uses Obsidian theme colors and the plugin's X icon. The cover picker offers note images and a local-file tab; local files remain in memory until saving.
 
 Cover confirmation opens a Cropper.js dialog with a fixed 5:2 frame, dragging and zoom controls. Re-cropping retains the original image and crop coordinates within the dialog session. Animated images are decoded to a static first frame. The exported cover is a separate PNG up to 2560 pixels wide; source files and body images remain unchanged. Cover previews and cancelled selections do not trigger uploads.
 

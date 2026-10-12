@@ -5,7 +5,7 @@ export type ContentBlock =
   | { type: 'text'; kind: TextKind; text: string; styles: TextStyle[]; links: TextLink[] }
   | { type: 'image'; source: string; alt: string }
   | { type: 'markdown'; markdown: string };
-export interface ParsedNote { title: string; cover: string; body: string; blocks: ContentBlock[]; }
+export interface ParsedNote { title: string; body: string; blocks: ContentBlock[]; }
 export interface MediaAsset { source: string; name: string; mime: string; base64: string; }
 export interface UploadedMedia { id: string; localId: string; category: string; entityKey?: string; }
 export interface XContent {

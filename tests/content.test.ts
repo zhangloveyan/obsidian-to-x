@@ -8,13 +8,16 @@ function asText(block: ContentBlock | undefined): Extract<ContentBlock, { type: 
   return block as Extract<ContentBlock, { type: 'text' }>;
 }
 
-test('frontmatter title and cover override first heading and preserve body H1', () => {
+test('note properties cannot set the title, select a cover or enter the article body', () => {
   const note = parseNote('---\ntitle: "元数据标题"\ncover: "![[素材/封面.png|600]]"\nother: value\n---\n# 正文标题\n\n正文', 'fallback.md');
-  assert.equal(note.title, '元数据标题');
-  assert.equal(note.cover, '素材/封面.png');
-  assert.equal(asText(note.blocks[0]).kind, 'header-one');
-  assert.equal(asText(note.blocks[0]).text, '正文标题');
-  assert.equal(note.body, '# 正文标题\n\n正文');
+  assert.equal(note.title, '正文标题');
+  assert.equal('cover' in note, false);
+  assert.equal(asText(note.blocks[0]).text, '正文');
+  assert.equal(note.body.trim(), '正文');
+  const wire = JSON.stringify(serializeContent(note.blocks, new Map()));
+  assert.equal(wire.includes('元数据标题'), false);
+  assert.equal(wire.includes('封面.png'), false);
+  assert.equal(parseNote('---\ntitle: Ignored\ncover: ignored.png\n---\nBody', 'Filename.md').title, 'Filename');
 });
 
 test('first top-level H1 becomes title, with filename fallback and later H1 retained', () => {
@@ -128,17 +131,16 @@ test('image paths decode Markdown destinations once while preserving wiki litera
   assert.deepEqual(note.blocks.map((block) => block.type === 'image' ? block.source : ''), [
     'foo bar.png', 'foo%20bar.png', 'foo%20bar.png', '图.png', 'https://example.com/foo%2520bar.png',
   ]);
-  assert.equal(parseNote('---\ncover: "foo%20bar.png"\n---\ntext', 'note.md').cover, 'foo%20bar.png');
-  assert.equal(parseNote('---\ncover: "![[foo%20bar.png]]"\n---\ntext', 'note.md').cover, 'foo%20bar.png');
-  assert.equal(parseNote('---\ncover: "![cover](foo%2520bar.png)"\n---\ntext', 'note.md').cover, 'foo%20bar.png');
-  assert.equal(parseNote('---\ncover: "![cover](foo%20bar.png)"\n---\ntext', 'note.md').cover, 'foo bar.png');
 });
 
-test('invalid metadata is reported and an unmatched frontmatter delimiter is retained', () => {
-  assert.throws(() => parseNote('---\ntitle: [bad\n---\ntext', 'note.md'), /Frontmatter YAML is invalid/);
-  assert.throws(() => parseNote('---\ncover: 123\n---\ntext', 'note.md'), /cover must be text/);
+test('properties are skipped without YAML parsing and an unmatched delimiter remains article content', () => {
+  for (const properties of ['title: [bad', 'cover: 123', '- item', 'title: One\ntitle: Two']) {
+    const note = parseNote(`---\n${properties}\n---\ntext`, 'note.md');
+    assert.equal(note.title, 'note');
+    assert.equal(note.body, 'text');
+  }
+  assert.equal(parseNote('\uFEFF---\r\ntitle: Ignored\r\n...\r\ntext', 'note.md').body, 'text');
   assert.equal(parseNote('---\ntext', 'note.md').blocks[0]?.type, 'markdown');
-  assert.equal(parseNote('---\ncover: "![cover](path/image.png)"\n---\ntext', 'note.md').cover, 'path/image.png');
 });
 
 test('hidden Obsidian and HTML comments are absent from both preview body and wire content', () => {

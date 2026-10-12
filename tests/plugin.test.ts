@@ -83,7 +83,7 @@ function deferred() {
 }
 
 const note: ParsedNote = {
-  title: 'Reviewed title', cover: 'a.png', body: '',
+  title: 'Reviewed title', body: '',
   blocks: [
     { type: 'text', kind: 'unstyled', text: 'Reviewed body', styles: [], links: [] },
     { type: 'image', source: 'a.png', alt: 'first' },
@@ -91,17 +91,17 @@ const note: ParsedNote = {
   ]
 };
 
-test('reviewed note and cover are passed once; successful drafts retain the connection and unload cleanup cannot change success', async () => {
+test('reviewed note is passed once without an automatic cover; successful drafts retain the connection and unload cleanup cannot change success', async () => {
   const { instance, calls } = await pluginHarness(true);
   const result = await instance.saveDraft({ path: 'selected.md' }, note, () => {});
   assert.equal(result.id, 'test');
   assert.equal(instance.busy, false);
   assert.equal(calls.filter(call => call.name === 'image').length, 1);
-  const request = calls.find(call => call.name === 'save')!.request as { title: string; blocks: unknown[]; images: unknown[]; cover: { source: string } };
+  const request = calls.find(call => call.name === 'save')!.request as { title: string; blocks: unknown[]; images: unknown[]; cover?: unknown };
   assert.equal(request.title, note.title);
   assert.equal(request.blocks, note.blocks);
   assert.equal(request.images.length, 1);
-  assert.equal(request.cover.source, 'a.png');
+  assert.equal(request.cover, undefined);
   assert.equal(calls.filter(call => call.name === 'close').length, 0);
   await instance.saveDraft({ path: 'selected.md' }, note, () => {});
   assert.equal(calls.filter(call => call.name === 'connect').length, 1);
@@ -201,7 +201,7 @@ test('empty runtime paths use discovery and an explicitly chosen local cover is 
   instance.settings.nodePath = '';
   instance.settings.mcpPath = '';
   const cover = { source: 'selected-local-cover', name: 'cover.png', mime: 'image/png', base64: 'chosen-by-user' };
-  await instance.saveDraft({ path: 'selected.md' }, { ...note, cover: '' }, () => {}, cover);
+  await instance.saveDraft({ path: 'selected.md' }, note, () => {}, cover);
   const request = calls.find(call => call.name === 'save')!.request as { cover: unknown };
   assert.equal(request.cover, cover);
   assert.equal(calls.filter(call => call.name === 'image').length, 1);

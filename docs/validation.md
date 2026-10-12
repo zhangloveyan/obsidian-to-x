@@ -1,6 +1,6 @@
 # Verification record
 
-Version: **0.1.13**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.14**. Updated: **2026-10-12**. Timestamps below use UTC.
 
 ## Build and automated checks
 
@@ -9,6 +9,8 @@ Version: **0.1.13**. Updated: **2026-10-12**. Timestamps below use UTC.
 The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplied that alias inside each VM, preserving isolation from the host global object, and passed GitHub's Ubuntu build, lint and 157 tests. The affected tests still exercise real SDK child-process behavior. It also added an English README with a separate Chinese translation without changing application behavior.
 
 Version 0.1.13 addresses the directory's style checks: Cropper.js CSS is in the standard `styles.css` asset, scoped with `:where(.mxp-crop-modal)` and placed before the existing overrides. Removing that scope reproduces the original dependency CSS without declaration changes; CSS parsing and the eight cover tests passed. The modal test rejects dynamic style elements. The two fixed-style assignments inside the serialized X-page function have narrow ESLint exceptions explaining that Obsidian styles and DOM helpers are unavailable in Chrome. Both relevant Obsidian style rules now run locally. Development lint dependencies were updated and `npm audit` reports no vulnerabilities. The save algorithm and three-refresh media flow remain unchanged.
+
+Version 0.1.14 removes note-property publishing options and the bundled YAML parser. Properties no longer supply a title or cover; the title comes from the first top-level H1 or filename, and a cover is selected in the dialog. The leading property block is excluded from article content without parsing its values. Regression checks cover ignored title/cover fields, invalid property values, filename fallback, absence of automatic covers and explicit cover assets. No live X draft was created for this change.
 
 The current test suite covers:
 

@@ -1,5 +1,4 @@
 import MarkdownIt from 'markdown-it';
-import { parseDocument } from 'yaml';
 import type { ContentBlock, ParsedNote, TextKind, TextLink, TextStyle, UploadedMedia, XContent } from '../model';
 
 const parser = new MarkdownIt({ html: true, linkify: false, typographer: false });
@@ -46,34 +45,12 @@ function imageSource(token: Token): string {
   catch { return source; }
 }
 
-function normalizeCover(value: string): string {
-  const source = value.trim();
-  const wiki = /^!?\[\[([^\]\n]+)\]\]$/.exec(source);
-  if (wiki) return (wiki[1]?.split('|')[0] ?? '').trim();
-  const inline = parser.parseInline(source, {})[0]?.children;
-  if (inline?.length === 1 && inline[0]?.type === 'image') return imageSource(inline[0]);
-  return source;
-}
-
-function extractMetadata(markdown: string): { body: string; title: string; cover: string } {
+// Obsidian properties are not article content or publishing options.
+function stripProperties(markdown: string): string {
   const lines = markdown.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
-  if (lines[0] !== '---') return { body: lines.join('\n'), title: '', cover: '' };
+  if (lines[0] !== '---') return lines.join('\n');
   const end = lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line));
-  if (end < 0) return { body: lines.join('\n'), title: '', cover: '' };
-  const document = parseDocument(lines.slice(1, end).join('\n'), { uniqueKeys: true });
-  if (document.errors.length) throw new Error(`Frontmatter YAML is invalid: ${document.errors[0]?.message}`);
-  const metadata: unknown = document.toJS({ maxAliasCount: 100 });
-  if (metadata !== null && (typeof metadata !== 'object' || Array.isArray(metadata))) {
-    throw new Error('Frontmatter must be a YAML mapping.');
-  }
-  const values = (metadata ?? {}) as Record<string, unknown>;
-  const readString = (name: string): string => {
-    const value = values[name];
-    if (value === undefined || value === null) return '';
-    if (typeof value !== 'string') throw new Error(`Frontmatter ${name} must be text.`);
-    return value.trim();
-  };
-  return { body: lines.slice(end + 1).join('\n'), title: readString('title'), cover: normalizeCover(readString('cover')) };
+  return (end < 0 ? lines : lines.slice(end + 1)).join('\n');
 }
 
 function escapedAt(source: string, position: number): boolean {
@@ -305,24 +282,21 @@ function preserveReferences(markdown: string, tokenGroup: Token[], environment: 
 
 /** Parse authored Markdown without depending on Obsidian or a browser session. */
 export function parseNote(markdown: string, filename: string): ParsedNote {
-  const metadata = extractMetadata(markdown);
-  let body = stripComments(metadata.body);
-  let title = metadata.title;
+  let body = stripComments(stripProperties(markdown));
+  let title = '';
   let environment: Parameters<typeof parser.parse>[1] = {};
   let tokens = parser.parse(body, environment);
-  if (!title) {
-    const heading = tokens.findIndex((token) => token.type === 'heading_open' && token.tag === 'h1' && token.level === 0);
-    if (heading >= 0) {
-      const token = tokens[heading];
-      if (containsImage(tokens[heading + 1]?.children ?? [])) throw new Error('文章标题含有图片。请将图片移到单独段落后重试。');
-      title = plainInline(tokens[heading + 1]?.children ?? []).trim();
-      if (title && token?.map) {
-        const lines = body.split('\n');
-        lines.splice(token.map[0], token.map[1] - token.map[0]);
-        body = lines.join('\n');
-        environment = {};
-        tokens = parser.parse(body, environment);
-      }
+  const heading = tokens.findIndex((token) => token.type === 'heading_open' && token.tag === 'h1' && token.level === 0);
+  if (heading >= 0) {
+    const token = tokens[heading];
+    if (containsImage(tokens[heading + 1]?.children ?? [])) throw new Error('文章标题含有图片。请将图片移到单独段落后重试。');
+    title = plainInline(tokens[heading + 1]?.children ?? []).trim();
+    if (title && token?.map) {
+      const lines = body.split('\n');
+      lines.splice(token.map[0], token.map[1] - token.map[0]);
+      body = lines.join('\n');
+      environment = {};
+      tokens = parser.parse(body, environment);
     }
   }
   title ||= (filename.split(/[\\/]/).pop() ?? filename).replace(/\.md$/i, '') || 'Untitled';
@@ -346,7 +320,7 @@ export function parseNote(markdown: string, filename: string): ParsedNote {
     else throw new Error(`Cannot preserve Markdown token: ${token.type}`);
     index = end;
   }
-  return { title, cover: metadata.cover, body, blocks };
+  return { title, body, blocks };
 }
 
 function validateRange(text: string, range: Pick<TextLink, 'offset' | 'length'>): void {

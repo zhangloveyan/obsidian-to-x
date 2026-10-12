@@ -1,6 +1,6 @@
 {
   "name": "markdown-x-publisher",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Preview Markdown notes and save X Article drafts using your Chrome session.",
   "type": "module",
   "main": "main.js",
@@ -23,8 +23,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "cropperjs": "1.6.2",
-    "markdown-it": "15.0.2",
-    "yaml": "2.9.1"
+    "markdown-it": "15.0.2"
   },
   "devDependencies": {
     "@eslint/js": "9.30.1",

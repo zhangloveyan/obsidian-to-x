@@ -26,7 +26,7 @@ class Control {
 }
 
 const compiled = (async () => {
-  const bundle = await build({ entryPoints: ['src/browser/x-page.ts'], bundle: true, platform: 'node', format: 'cjs', target: 'es2022', minify: false, write: false, external: ['markdown-it', 'yaml'] });
+  const bundle = await build({ entryPoints: ['src/browser/x-page.ts'], bundle: true, platform: 'node', format: 'cjs', target: 'es2022', minify: false, write: false, external: ['markdown-it'] });
   const module = { exports: {} as { runPage<T>(bridge: BrowserBridge, action: PageAction): Promise<T> } };
   runInContext(bundle.outputFiles[0]!.text, createContext({ module, require: createRequire(import.meta.url) }));
   return module.exports.runPage;

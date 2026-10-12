@@ -40,7 +40,7 @@ export class DraftModal extends Modal {
     const crop = coverActions.createEl('button', { text: '裁剪封面', attr: { type: 'button' } });
     const clear = coverActions.createEl('button', { text: '清除封面', cls: 'mxp-clear-cover', attr: { type: 'button' } });
     coverField.createEl('p', { cls: 'mxp-help', text: '可以不设置封面。选中的图片会在保存草稿时上传。' });
-    let cover: CoverSelection = { source: this.note.cover };
+    let cover: CoverSelection = { source: '' };
     let previewVersion = 0;
     const drawCover = (): void => {
       const version = ++previewVersion;
@@ -116,7 +116,7 @@ export class DraftModal extends Modal {
       save.setText('保存中…');
       void (async () => {
         try {
-          const result = await this.publisher.saveDraft(this.file, { ...this.note, title, cover: cover.source }, message => {
+          const result = await this.publisher.saveDraft(this.file, { ...this.note, title }, message => {
             if (!this.closed) status.setText(message);
           }, cover.asset, this.session);
           this.saved = true;

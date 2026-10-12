@@ -171,12 +171,11 @@ export default class MarkdownXPublisher extends Plugin {
         assets.push(asset);
         diagnostic('image.prepared', { index: index + 1, total: sources.length, mime: asset.mime, bytes: Math.floor(asset.base64.length * 3 / 4), durationMs: Date.now() - imageStarted });
       }
-      const cover = coverAsset ?? (note.cover ? assets.find(asset => asset.source === note.cover) ?? await loadImage(this.app, note.cover, file.path) : undefined);
       progress('正在连接日常 Chrome…');
       stage = 'connection';
       const bridge = await this.getBridge(connection);
       stage = 'draft';
-      const result = await saveDraft(bridge, { title: note.title, blocks: note.blocks, images: assets, cover }, progress, diagnostic, session);
+      const result = await saveDraft(bridge, { title: note.title, blocks: note.blocks, images: assets, cover: coverAsset }, progress, diagnostic, session);
       diagnostic('operation.completed', { operation: 'save', elapsedMs: Date.now() - started });
       return result;
     } catch (error) {
