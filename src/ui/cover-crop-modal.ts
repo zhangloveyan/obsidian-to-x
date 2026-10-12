@@ -1,7 +1,6 @@
 import { Modal, setIcon } from 'obsidian';
 import type { App } from 'obsidian';
 import Cropper from 'cropperjs';
-import cropperStyles from 'cropperjs/dist/cropper.css';
 import { loadImage } from '../assets';
 import type { CoverCropData, CoverSelection } from './cover-selection';
 import { encodeCroppedCover, prepareCoverImage } from './cover-crop-image';
@@ -23,8 +22,6 @@ export class CoverCropModal extends Modal {
     this.modalEl.addClass('mxp-crop-modal');
     const root = this.contentEl;
     root.empty();
-    // Ship the library's CSS in main.js as well as its code and license.
-    root.createEl('style').textContent = cropperStyles;
     const header = root.createDiv({ cls: 'mxp-crop-header' });
     const back = header.createEl('button', { cls: 'mxp-icon-button', attr: { type: 'button', 'aria-label': '返回' } });
     setIcon(back, 'arrow-left');

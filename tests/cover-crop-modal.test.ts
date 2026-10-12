@@ -11,7 +11,10 @@ const DOM_SELECTION = { rangeCount: 0, anchorNode: null };
 class ElementStub {
   disabled = false;
   textContent = '';
-  createEl(): ElementStub { return new ElementStub(); }
+  createEl(tag: string): ElementStub {
+    assert.notEqual(tag, 'style', 'Obsidian requires styles.css instead of attaching style elements');
+    return new ElementStub();
+  }
   createDiv(): ElementStub { return new ElementStub(); }
   empty(): void {}
   addClass(): void {}
@@ -36,7 +39,6 @@ class ModalStub {
 
 const bundle = build({
   entryPoints: ['src/ui/cover-crop-modal.ts'], bundle: true, platform: 'node', format: 'cjs', write: false,
-  loader: { '.css': 'text' },
   plugins: [{ name: 'crop-modal-input-host', setup(builder) {
     builder.onResolve({ filter: /^obsidian$/ }, () => ({ path: 'obsidian', namespace: 'host' }));
     builder.onLoad({ filter: /.*/, namespace: 'host' }, () => ({ loader: 'js', contents: `
