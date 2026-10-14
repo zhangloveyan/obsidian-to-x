@@ -268,6 +268,62 @@ function containsImage(tokens: Token[]): boolean {
     || (token.children && containsImage(token.children)));
 }
 
+export class ArticleImageError extends Error {
+  constructor(
+    readonly location: string,
+    readonly reason: string,
+    readonly context: Array<{ line: number; text: string; highlighted: boolean }>,
+    readonly suggestion: string,
+  ) {
+    super(`${location}：${reason}\n\n原文附近：\n${context.map(row => `${row.highlighted ? '→' : ' '} ${row.line} | ${row.text}`).join('\n')}\n\n修改方法：${suggestion}`);
+    this.name = 'ArticleImageError';
+  }
+}
+
+function imageError(tokens: Token[], sourceLines: string[], lineNumbers: number[]): ArticleImageError {
+  const root = tokens[0];
+  let range = root?.map ?? [0, 1];
+  // Inline tokens in table cells have no map; their row supplies the location.
+  for (const token of tokens) {
+    if (token.map) range = token.map;
+    if ((token.type === 'inline' && containsImage(token.children ?? []))
+      || (token.type === 'html_block' && containsImage([token]))) break;
+  }
+  const start = lineNumbers[range[0]] ?? 0;
+  const end = lineNumbers[Math.max(range[0], range[1] - 1)] ?? start;
+  const blockStart = lineNumbers[root?.map?.[0] ?? range[0]] ?? start;
+  const blockEnd = lineNumbers[(root?.map?.[1] ?? range[1]) - 1] ?? end;
+  const contextStart = Math.max(blockStart, start - 2);
+  const contextEnd = Math.min(blockEnd, Math.max(end, start + 2));
+  const context = sourceLines.slice(contextStart, contextEnd + 1).map((text, index) => ({
+    line: contextStart + index + 1, text,
+    highlighted: contextStart + index >= start && contextStart + index <= end,
+  }));
+  let structure = '图文混排段落';
+  let suggestion = '将图片单独放在一个顶格的段落中，前后各留一个空行；图片不要包在链接里，也不要附加图片标题。';
+  if (root?.type === 'ordered_list_open' || root?.type === 'bullet_list_open') {
+    const ordered = root.type === 'ordered_list_open';
+    structure = ordered ? '编号列表' : '无序列表';
+    suggestion = ordered
+      ? '将这组步骤改成普通段落，例如“第 1 步：…”。再删除图片行前的缩进，让图片顶格，前后各留一个空行。仅增加空行、保留缩进，图片仍然属于列表。'
+      : '将这组列表文字改成普通段落，再删除图片行前的缩进，让图片顶格，前后各留一个空行。仅增加空行、保留缩进，图片仍然属于列表。';
+  } else if (root?.type === 'table_open') {
+    structure = '表格';
+    suggestion = '将图片移到整个表格的前面或后面，单独占一段并顶格，前后各留一个空行。';
+  } else if (root?.type === 'blockquote_open') {
+    structure = '引用';
+    suggestion = '将图片移到整段引用的外面，去掉图片行前的 > 和缩进，前后各留一个空行。';
+  } else if (root?.type === 'heading_open') {
+    structure = '标题';
+    suggestion = '将图片移到标题下方，图片行前不要保留 # 或缩进，并在前后各留一个空行。';
+  } else if (root?.type === 'html_block') {
+    structure = 'HTML 段落';
+    suggestion = '将 HTML 图片改为 ![说明](图片路径)，放在 HTML 外单独一段并顶格，前后各留一个空行。';
+  }
+  const location = `原文第 ${start + 1}${end > start ? `–${end + 1}` : ''} 行 · ${structure}`;
+  return new ArticleImageError(location, `插件暂不支持这段${structure}中的图片。`, context, suggestion);
+}
+
 function preserveReferences(markdown: string, tokenGroup: Token[], environment: Parameters<typeof parser.parse>[1]): string {
   const hasLink = (tokens: Token[]): boolean => tokens.some((token) => token.type === 'link_open' || (token.children && hasLink(token.children)));
   if (!environment.references || !hasLink(tokenGroup)) return markdown;
@@ -282,18 +338,27 @@ function preserveReferences(markdown: string, tokenGroup: Token[], environment: 
 
 /** Parse authored Markdown without depending on Obsidian or a browser session. */
 export function parseNote(markdown: string, filename: string): ParsedNote {
+  const sourceLineCount = markdown.replace(/\r\n?/g, '\n').split('\n').length;
   let body = stripComments(stripProperties(markdown));
+  const bodyLines = body.split('\n');
+  const bodyLineCount = bodyLines.length;
+  // Keep source line numbers without putting hidden comments back into the preview.
+  const sourceLines = [...Array<string>(sourceLineCount - bodyLineCount).fill(''), ...bodyLines];
+  const lineNumbers = Array.from({ length: bodyLineCount }, (_, index) => sourceLines.length - bodyLineCount + index);
   let title = '';
   let environment: Parameters<typeof parser.parse>[1] = {};
   let tokens = parser.parse(body, environment);
   const heading = tokens.findIndex((token) => token.type === 'heading_open' && token.tag === 'h1' && token.level === 0);
   if (heading >= 0) {
     const token = tokens[heading];
-    if (containsImage(tokens[heading + 1]?.children ?? [])) throw new Error('文章标题含有图片。请将图片移到单独段落后重试。');
+    if (containsImage(tokens[heading + 1]?.children ?? [])) {
+      throw imageError(tokens.slice(heading, matchingClose(tokens, heading) + 1), sourceLines, lineNumbers);
+    }
     title = plainInline(tokens[heading + 1]?.children ?? []).trim();
     if (title && token?.map) {
       const lines = body.split('\n');
       lines.splice(token.map[0], token.map[1] - token.map[0]);
+      lineNumbers.splice(token.map[0], token.map[1] - token.map[0]);
       body = lines.join('\n');
       environment = {};
       tokens = parser.parse(body, environment);
@@ -314,7 +379,7 @@ export function parseNote(markdown: string, filename: string): ParsedNote {
     else if (token.type === 'blockquote_open') native = nativeQuote(tokens, index, end);
     if (native) blocks.push(...native);
     else if (containsImage(tokens.slice(index, end + 1))) {
-      throw new Error(`第 ${(token.map?.[0] ?? 0) + 1} 行的复杂 Markdown 含有无法独立上传的图片。请将图片移到单独段落后重试。`);
+      throw imageError(tokens.slice(index, end + 1), sourceLines, lineNumbers);
     } else if (token.map) blocks.push({ type: 'markdown', markdown: preserveReferences(lines.slice(token.map[0], token.map[1]).join('\n'), tokens.slice(index, end + 1), environment) });
     else if (token.content) blocks.push({ type: 'markdown', markdown: token.content });
     else throw new Error(`Cannot preserve Markdown token: ${token.type}`);

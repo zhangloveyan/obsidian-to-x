@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseNote, serializeContent } from '../src/content/article';
+import { ArticleImageError, parseNote, serializeContent } from '../src/content/article';
 import type { ContentBlock, UploadedMedia } from '../src/model';
 
 function asText(block: ContentBlock | undefined): Extract<ContentBlock, { type: 'text' }> {
@@ -109,7 +109,64 @@ test('deeper headings fold into the second native heading level', () => {
 
 test('images in fallback Markdown fail explicitly instead of creating incomplete drafts', () => {
   for (const source of ['- top\n  - ![[nested.png]]', '| image |\n| --- |\n| ![alt](local.png) |', '[![alt](photo.png)](https://example.com)', 'before `code` ![[local.png]]', '<img src="local.png">', '# Title ![[title.png]]']) {
-    assert.throws(() => parseNote(source, 'note.md'), /请将图片移到单独段落后重试/, source);
+    assert.throws(() => parseNote(source, 'note.md'), ArticleImageError, source);
+  }
+});
+
+test('list image errors show the image paragraph and surrounding source instead of the list start', () => {
+  const source = '## 使用\n\n1. 打开文章\n\n2. 打开 **预览**\n\n   ![截图](preview.png)\n\n3. 保存草稿';
+  assert.throws(() => parseNote(source, 'note.md'), (error: unknown) => {
+    assert.ok(error instanceof ArticleImageError);
+    assert.equal(error.location, '原文第 7 行 · 编号列表');
+    assert.deepEqual(error.context, [
+      { line: 5, text: '2. 打开 **预览**', highlighted: false },
+      { line: 6, text: '', highlighted: false },
+      { line: 7, text: '   ![截图](preview.png)', highlighted: true },
+      { line: 8, text: '', highlighted: false },
+      { line: 9, text: '3. 保存草稿', highlighted: false },
+    ]);
+    assert.match(error.suggestion, /普通段落/);
+    assert.match(error.suggestion, /仅增加空行/);
+    return true;
+  });
+});
+
+test('image diagnostics preserve original lines after properties and H1 removal without exposing comments', () => {
+  const source = '\uFEFF---\r\ntitle: private property\r\n---\r\n# 标题\r\n\r\n%%private\r\ncomment%%\r\n\r\n- 说明 %%private inline%%\r\n\r\n  ![[图.png]]';
+  assert.throws(() => parseNote(source, 'note.md'), (error: unknown) => {
+    assert.ok(error instanceof ArticleImageError);
+    assert.equal(error.location, '原文第 11 行 · 无序列表');
+    assert.equal(error.context[0]?.line, 9);
+    assert.equal(error.context.at(-1)?.text, '  ![[图.png]]');
+    assert.equal(error.message.includes('private'), false);
+    return true;
+  });
+});
+
+test('table image errors use the image row and multiline paragraphs report a range', () => {
+  for (const [source, location] of [
+    ['# 标题\n\n| 图片 |\n| --- |\n| ![图](a.png) |', '原文第 5 行 · 表格'],
+    ['文字 `代码`\n![图](a.png)', '原文第 1–2 行 · 图文混排段落'],
+    ['# 标题 ![[封面.png]]', '原文第 1 行 · 标题'],
+  ]) {
+    assert.throws(() => parseNote(source!, 'note.md'), (error: unknown) => {
+      assert.ok(error instanceof ArticleImageError);
+      assert.equal(error.location, location);
+      return true;
+    });
+  }
+});
+
+test('long problem paragraphs keep the actual image visible in their source context', () => {
+  for (const source of [
+    '前文 `代码`\n第二行\n第三行\n第四行\n第五行\n![图片](problem.png)',
+    '<div>\n第二行\n第三行\n第四行\n第五行\n<img src="problem.png">\n</div>',
+  ]) {
+    assert.throws(() => parseNote(source, 'note.md'), (error: unknown) => {
+      assert.ok(error instanceof ArticleImageError);
+      assert.ok(error.context.some(row => row.highlighted && row.text.includes('problem.png')));
+      return true;
+    });
   }
 });
 

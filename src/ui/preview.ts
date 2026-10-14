@@ -1,7 +1,7 @@
 import { ItemView, MarkdownView, Notice, setIcon } from 'obsidian';
 import type { WorkspaceLeaf, TFile } from 'obsidian';
 import type MarkdownXPublisher from '../main';
-import { parseNote } from '../content/article';
+import { ArticleImageError, parseNote } from '../content/article';
 import { renderArticle } from './render-article';
 import { X_PUBLISHER_ICON } from './icons';
 
@@ -110,7 +110,24 @@ export class ArticlePreview extends ItemView {
       this.saveButton.disabled = false;
       this.saveButton.title = `保存 ${path}`;
     } catch (error) {
-      if (!this.closed && turn === this.generation) this.article.setText(`预览失败：${error instanceof Error ? error.message : String(error)}`);
+      if (!this.closed && turn === this.generation) {
+        this.article.empty();
+        if (error instanceof ArticleImageError) {
+          const panel = this.article.createDiv({ cls: 'mxp-preview-error', attr: { role: 'alert' } });
+          panel.createEl('h2', { text: '暂时无法预览' });
+          panel.createEl('p', { cls: 'mxp-error-location', text: error.location });
+          panel.createEl('p', { text: error.reason });
+          panel.createEl('p', { cls: 'mxp-error-label', text: '原文附近（标记行为问题所在段落）' });
+          const excerpt = panel.createEl('pre', { cls: 'mxp-error-context' });
+          for (const row of error.context) {
+            const line = excerpt.createSpan({ cls: row.highlighted ? 'mxp-error-line is-highlighted' : 'mxp-error-line' });
+            line.createSpan({ cls: 'mxp-error-line-number', text: `${row.highlighted ? '→' : ' '} ${row.line}` });
+            line.createSpan({ cls: 'mxp-error-line-text', text: row.text || ' ' });
+          }
+          panel.createEl('p', { cls: 'mxp-error-label', text: '怎么修改' });
+          panel.createEl('p', { text: error.suggestion });
+        } else this.article.setText(`预览失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 

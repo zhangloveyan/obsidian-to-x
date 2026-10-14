@@ -33,6 +33,29 @@
 .mxp-article pre { overflow-x: auto; }
 .mxp-article table { display: block; overflow-x: auto; }
 .mxp-text { white-space: pre-wrap; }
+.mxp-preview-error { font-size: var(--font-ui-small); }
+.mxp-preview-error > h2 { margin: 0 0 12px; font-size: 1.15em; }
+.mxp-preview-error > p { margin: 8px 0; }
+.mxp-preview-error .mxp-error-location { color: var(--text-error); font-weight: 600; }
+.mxp-preview-error .mxp-error-label { margin-top: 18px; font-weight: 600; }
+.mxp-preview-error .mxp-error-context {
+  margin: 8px 0;
+  padding: 8px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.mxp-error-line { display: flex; padding: 2px 8px; }
+.mxp-error-line.is-highlighted {
+  background: color-mix(in srgb, var(--text-error) 12%, transparent);
+  box-shadow: inset 2px 0 var(--text-error);
+}
+.mxp-error-line-number { flex: 0 0 5ch; color: var(--text-muted); user-select: none; }
+.mxp-error-line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mxp-settings { max-width: 850px; }
 .mxp-settings .setting-item-control input[type="text"] { width: 280px; max-width: 100%; }
 .mxp-help { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.6; }
