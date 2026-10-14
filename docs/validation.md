@@ -1,10 +1,10 @@
 # Verification record
 
-Version: **0.1.18**. Updated: **2026-10-12**. Timestamps below use UTC.
+Version: **0.1.18** (local development changes included). Updated: **2026-10-14**. Timestamps below use UTC.
 
 ## Build and automated checks
 
-`npm run package` passed TypeScript, the production build, whole-project ESLint and **173 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+`npm run package` passed TypeScript, the production build, whole-project ESLint and **197 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
 The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplied that alias inside each VM, preserving isolation from the host global object, and passed GitHub's Ubuntu build, lint and 157 tests. The affected tests still exercise real SDK child-process behavior. It also added an English README with a separate Chinese translation without changing application behavior.
 
@@ -25,6 +25,16 @@ The current test suite covers:
 - Runtime discovery, connection lifetime, MCP transport failure classification, diagnostic privacy, preview behavior and cover selection/cropping.
 
 The page adapters were also extracted from in-memory production bundles and executed in isolated VMs. Checks confirm that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, the cover input is excluded, and navigation or editor replacement stops submission. Ambiguous, disabled or unsuitable dialog inputs are rejected. Removing a known pre-submission blocker allows the same token to be tried safely. These are local simulations, not live X UI tests.
+
+## Settings configuration verification
+
+The local settings update implements the approved empty-first-use form, explicit runtime-path saving, single-token editor, installation tutorial and manifest-derived version footer. Tests cover directory and legacy executable-path compatibility, invalid manual overrides without fallback, independent runtime errors, official MCP package/entry validation, extension installation detection, and the native directory dialog's selection, cancellation and failure behavior.
+
+Plugin lifecycle tests verify that runtime paths become active together only after persistence succeeds, failed writes retain the prior settings and connection, and concurrent preference/credential/browser operations are blocked during a save. Token replacement preserves an existing shared credential, keeps token values out of plugin preferences and restores the previous private value after a persistence failure.
+
+A read-only local check found Node.js, Playwright MCP and the installed official Chrome extension. The existing installed plugin's runtime paths were also accepted by the new folder-based checks. These checks do not establish a live Chrome connection. Native dialog integration was checked against the locally installed Obsidian remote API and isolated dialog fixtures; no real directory dialog or live X upload was opened for this settings change.
+
+An isolated Chromium host ran the production settings module, setup modal and stylesheet with controlled runtime, directory-picker and persistence fixtures. All 11 interaction groups passed with no page errors: first-open behavior, draft paths, invalid saves, folder selection/cancellation, stale detection, secret saving/testing, busy controls, runtime/secret saves finishing after reopening, tutorial actions and responsive layouts. Desktop light/dark and 390px layouts were inspected; they had no horizontal overflow. This verifies the UI with an Obsidian DOM shim, not an actual Obsidian session or account connection.
 
 ## Save notice verification
 
@@ -47,6 +57,8 @@ This verifies the DOM upload sequence against the current X interface. It was a 
 Version 0.1.16 fixes initial crop scaling. A local browser harness using the production crop modal and Cropper.js reproduced a landscape image opening at 104% before the fix. After the fix, 800×440 landscape, 420×800 portrait and 1200×300 wide fixtures all opened centered at 100%, with the shrink button disabled and no empty area inside the frame. Landscape and portrait image widths matched the frame; the wide image matched its height. Manual zoom and movement still worked, applying produced a 620×248 PNG, and reopening restored the exact adjusted canvas and 120% zoom. This used an Obsidian DOM shim and synthetic images; it was not a live Obsidian application check.
 
 ## Installed artifacts
+
+The 2026-10-14 local settings build, still version 0.1.18, was copied into the existing plugin directory. All five installed files matched the packaged SHA-256 hashes, and the existing `data.json` hash was unchanged. It requires reloading the installed plugin to activate; this local update does not represent a new published release.
 
 The 0.1.16 package was copied into the existing Obsidian plugin directory, with all five installed files verified by SHA-256. Existing plugin settings and the enabled-plugin list were unchanged. The earlier 0.1.11 installation was also hash-verified before the user run below. Local machine paths and account-specific draft links are omitted from this public record.
 

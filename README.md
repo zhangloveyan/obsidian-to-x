@@ -67,34 +67,38 @@
 
 ### 1. 安装运行环境
 
-安装 [Node.js](https://nodejs.org/en/download)，然后在终端运行：
+安装 [Node.js](https://nodejs.org/en/download) 的 **LTS（长期支持版）**。Windows 用户按 **Win + R**，输入 `cmd` 并按回车；macOS 或 Linux 用户打开终端，然后运行：
 
 ```sh
 npm install -g @playwright/mcp@0.0.83
 ```
 
-打开 Obsidian 中的插件设置，点击 **重新检测**。插件会自动查找已安装的 Node.js 和 Playwright MCP，通常无需填写路径。
+首次打开插件设置时，两个安装文件夹输入框为空。点击 **自动检测**，插件找到 Node.js 和 Playwright MCP 后会填入文件夹路径；确认两项均显示“已找到”，再点击 **保存配置**。保存成功后，再次打开设置会保留这些路径。
 
-如果刚安装 Node.js 后仍未检测到，请重启 Obsidian。特殊安装位置可在 **高级设置：手动指定程序路径** 中配置。
+也可以直接输入路径，或点击输入框右侧的**文件夹图标**选择安装文件夹，取消选择不会改动路径。**自动检测只检查已填写的位置，空白项才会自动查找并填入**。想重新查找某一项，先清空那一项再检测。
+
+输入、选择或自动找到的路径都要点击 **保存配置** 后才会生效。保存时会检查两个目录；失败时保留输入，原有配置继续有效。如果刚安装 Node.js 后仍未检测到，请重启 Obsidian。详细操作和路径填写示例见设置中的 **查看配置教程**。
 
 ### 2. 安装 Chrome 扩展
 
-用 Chrome 打开 [Playwright 扩展商店页面](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)，点击 **添加至 Chrome**。电脑上的 Playwright MCP 和浏览器扩展都需要安装；插件设置页也提供了安装入口与步骤。
+用 Chrome 打开 [Playwright 扩展商店页面](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)，点击 **添加至 Chrome**。电脑上的 Playwright MCP 和浏览器扩展都需要安装；设置中的 **查看配置教程** 提供了安装入口与步骤。
 
 安装后，点击 Chrome 工具栏的 **扩展程序**（拼图图标），打开 Playwright 扩展。更多说明见 [Playwright 官方扩展文档](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
 
 在同一个 Chrome 用户配置中登录 X，并确认可以新建长文章。
 
+点击 **自动检测** 也会查找 Chrome 中已安装的 Playwright 扩展文件。扩展显示“已找到”，只表示找到了安装文件；是否已启用、密钥是否有效以及能否连接 Chrome，都由后面的 **测试连接** 确认。未找到扩展时仍可保存 Node.js 和 MCP 路径。
+
 ### 3. 连接浏览器
 
 1. 打开 Chrome 中 Playwright 扩展的状态页。
-2. 复制 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`。
-3. 回到插件设置，在 **浏览器连接凭据** 中点击 **Link（关联）**，新建一份密钥，粘贴凭据并保存关联。
-4. 点击 **测试连接**。
+2. 复制 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 对应的密钥值。
+3. 回到插件设置，在 **浏览器凭证 → 连接密钥** 中粘贴密钥，点击 **保存**。
+4. 保持 Chrome 打开，点击 **测试连接**；显示“已连接到 Chrome”后完成配置。
 
-测试连接不会创建文章。凭据由 Obsidian 密钥存储管理；配置有效后，后续连接无需逐次点击允许。
+**保存密钥与测试连接是两个独立操作。** “已保存”表示密钥已保存，并不表示已经连上 Chrome。修改运行环境或密钥后，请先保存，再测试连接。测试只检查浏览器连接，不会创建文章，也不检查 X 登录状态或长文章权限。
 
-**一个有效密钥就够了。** **Change** 是 Obsidian 原生控件里的“更换当前关联密钥”；插件每次只使用选中的这一份。密钥列表也可能包含其他插件使用的条目。只有切换 Chrome 用户配置或 token 变化时，才需更新或更换，不用为每篇文章新建。
+只需保存一个有效密钥，无需选择或切换密钥列表，也不用为每篇文章重新填写。切换 Chrome 用户配置或扩展密钥变化后，在同一输入框更新并保存即可。凭据由 Obsidian 密钥存储管理；配置有效后，后续连接无需逐次点击允许。
 
 ## 使用
 
@@ -178,6 +182,7 @@ Dataview、复杂 HTML、自定义字体和其他插件的渲染效果不保证�
 - 保存时，文章内容和图片发送到 X；加载网络图片时会访问图片来源网站。
 - 浏览器连接凭据由 Obsidian 管理，不写入插件配置文件或问题日志。
 - 插件启动本机已安装的 Playwright MCP 来连接 Chrome，不自动安装运行环境。
+- 扩展检测只查找 Chrome 常见安装位置中的扩展文件，不读取浏览器历史、账号或登录凭据。
 - 问题日志仅保存在本地，不记录正文、标题、图片数据或连接凭据。MCP 的临时操作文件可能包含网页内容。
 - 不包含遥测、广告或 AI 服务调用。
 

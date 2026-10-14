@@ -1,18 +1,25 @@
 import { execFile } from 'node:child_process';
 import { readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, delimiter, dirname, extname, isAbsolute, join, resolve } from 'node:path';
+import { basename, delimiter, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const PROBE_TIMEOUT = 4_000;
 const MINIMUM_NODE_MAJOR = 18;
 const PREFERRED_MCP_VERSION = '0.0.83';
-export interface InstalledProgram { path: string; version: string; }
-export interface RuntimeDetection { node?: InstalledProgram; mcp?: InstalledProgram; issues: string[]; }
+export interface InstalledProgram { path: string; directory: string; version: string; }
+export interface RuntimeDetection { node?: InstalledProgram; mcp?: InstalledProgram; nodeIssue?: string; mcpIssue?: string; issues: string[]; }
 export interface RuntimePaths { nodePath: string; mcpPath: string; }
 
 function cleanPath(value: string): string { return value.trim().replace(/^"(.*)"$/, '$1'); }
+/** Present saved legacy entry paths as folders; filesystem validation still happens on detection/save. */
+export function cleanRuntimeDirectory(value: string, kind: 'node' | 'mcp'): string {
+  const path = cleanPath(value);
+  if (!isAbsolute(path)) return path;
+  const isEntry = kind === 'node' ? /^(node|node\.exe)$/i.test(basename(path)) : /\.(?:js|mjs|cjs)$/i.test(path);
+  return isEntry ? dirname(path) : path;
+}
 function environment(name: string): string | undefined {
   const key = Object.keys(process.env).find(key => key.toUpperCase() === name.toUpperCase());
   return key ? process.env[key] : undefined;
@@ -51,46 +58,61 @@ async function existingFile(path: string): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
+async function existingDirectory(path: string): Promise<string | undefined> {
+  try {
+    const resolved = await realpath(path);
+    return (await stat(resolved)).isDirectory() ? resolved : undefined;
+  } catch { return undefined; }
+}
+
 export async function inspectNode(configured: string): Promise<InstalledProgram> {
   const input = cleanPath(configured);
-  const candidates = isAbsolute(input) ? [input]
+  const directory = isAbsolute(input) ? await existingDirectory(input) : undefined;
+  const candidates = isAbsolute(input) ? [directory ? join(directory, nodeName()) : input]
     : /^(node|node\.exe)$/i.test(input) ? pathDirectories().map(directory => join(directory, nodeName())) : [];
   for (const candidate of candidates) {
     const path = await existingFile(candidate);
     if (!path) continue;
     let version: string;
     try { version = await execute(path, ['--version']); }
-    catch { throw new Error('指定的 Node.js 无法运行，请检查程序路径。'); }
+    catch { throw new Error('这个位置的 Node.js 无法运行，请重新选择安装文件夹，或重新安装 Node.js。'); }
     const match = /^v(\d+)\.\d+\.\d+(?:[-+][\w.-]+)?$/.exec(version);
     if (!match) throw new Error('指定程序没有返回有效的 Node.js 版本。');
     if (Number(match[1]) < MINIMUM_NODE_MAJOR) throw new Error('需要 Node.js 18 或更新版本，请更新 Node.js。');
-    return { path, version };
+    return { path, directory: dirname(path), version };
   }
-  throw new Error('找不到指定的 Node.js。请更正高级设置中的路径，或清空路径后自动检测。');
+  throw new Error('找不到指定的 Node.js。请选择包含 Node.js 程序的安装文件夹，或清空路径后自动检测。');
 }
 
 /** Validate package identity and declared executable; never run an arbitrary JavaScript candidate. */
 export async function inspectMcp(configured: string): Promise<InstalledProgram> {
   const input = cleanPath(configured);
-  if (!isAbsolute(input) || !['.js', '.mjs', '.cjs'].includes(extname(input).toLowerCase())) {
-    throw new Error('手动指定 MCP 时，请选择官方 @playwright/mcp 的 JavaScript 入口绝对路径。');
+  if (!isAbsolute(input)) {
+    throw new Error('请选择 Playwright MCP 的安装文件夹，或填写完整路径（绝对路径）。');
   }
-  const entry = await existingFile(input);
-  if (!entry) throw new Error('找不到指定的 Playwright MCP 文件。请更正高级设置中的路径，或清空路径后自动检测。');
-  let directory = dirname(entry);
-  for (let level = 0; level < 6; level++) {
+  const selectedDirectory = await existingDirectory(input);
+  const entry = selectedDirectory ? undefined : await existingFile(input);
+  if (!selectedDirectory && (!entry || !['.js', '.mjs', '.cjs'].includes(extname(entry).toLowerCase()))) {
+    throw new Error('找不到指定的 Playwright MCP。请选择 @playwright 文件夹中的 mcp 文件夹，或清空路径后自动检测。');
+  }
+  let directory = selectedDirectory ?? dirname(entry!);
+  for (let level = 0; level < (selectedDirectory ? 1 : 6); level++) {
     let contents: string | undefined;
     try { contents = await readFile(join(directory, 'package.json'), 'utf8'); } catch { /* Search the containing package. */ }
     if (contents !== undefined) {
       let manifest: { name?: unknown; version?: unknown; bin?: unknown };
       try { manifest = JSON.parse(contents) as typeof manifest; }
-      catch { throw new Error('Playwright MCP 的包信息损坏，请重新检查已安装的程序。'); }
+      catch { throw new Error('这个文件夹中的 Playwright MCP 文件已损坏，请重新安装。'); }
       if (manifest?.name !== '@playwright/mcp' || typeof manifest.version !== 'string') break;
       const bin = manifest.bin;
       const commands = typeof bin === 'string' ? [bin]
         : bin && typeof bin === 'object' ? Object.values(bin).filter((value): value is string => typeof value === 'string') : [];
       for (const command of commands) {
-        if (await existingFile(resolve(directory, command)) === entry) return { path: entry, version: manifest.version };
+        const declaredEntry = await existingFile(resolve(directory, command));
+        if (!declaredEntry || !['.js', '.mjs', '.cjs'].includes(extname(declaredEntry).toLowerCase())) continue;
+        const inside = relative(directory, declaredEntry);
+        if (inside === '..' || inside.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(inside)) continue;
+        if (!entry || declaredEntry === entry) return { path: declaredEntry, directory, version: manifest.version };
       }
       break;
     }
@@ -98,7 +120,7 @@ export async function inspectMcp(configured: string): Promise<InstalledProgram> 
     if (parent === directory) break;
     directory = parent;
   }
-  throw new Error('所选文件不是官方 @playwright/mcp 包声明的 CLI 入口。');
+  throw new Error('所选位置不是官方 Playwright MCP 的安装文件夹或启动文件。请选择 @playwright 文件夹中的 mcp 文件夹。');
 }
 
 async function installedVersions(directory: string): Promise<string[]> {
@@ -168,7 +190,7 @@ async function packageFromRoots(roots: string[]): Promise<InstalledProgram | und
   let fallback: InstalledProgram | undefined;
   for (const root of unique(roots)) {
     try {
-      const installed = await inspectMcp(join(root, '@playwright', 'mcp', 'cli.js'));
+      const installed = await inspectMcp(join(root, '@playwright', 'mcp'));
       if (installed.version === PREFERRED_MCP_VERSION) return installed;
       fallback ??= installed;
     }
@@ -242,17 +264,19 @@ export async function detectRuntime(settings: RuntimePaths): Promise<RuntimeDete
   const detection: RuntimeDetection = { issues: [] };
   if (settings.nodePath.trim()) {
     try { detection.node = await inspectNode(settings.nodePath); }
-    catch (error) { detection.issues.push(error instanceof Error ? error.message : 'Node.js 路径验证失败。'); }
+    catch (error) { detection.nodeIssue = error instanceof Error ? error.message : '无法检查 Node.js 安装文件夹，请重新选择。'; }
   } else {
     detection.node = await findNode();
-    if (!detection.node) detection.issues.push('没有找到可用的 Node.js 18 或更新版本。请先安装 Node.js，再点击重新检测；通常无需手填路径。');
+    if (!detection.node) detection.nodeIssue = '未找到可用的 Node.js。请按配置教程安装，再点击“自动检测”。';
   }
   if (settings.mcpPath.trim()) {
     try { detection.mcp = await inspectMcp(settings.mcpPath); }
-    catch (error) { detection.issues.push(error instanceof Error ? error.message : 'Playwright MCP 路径验证失败。'); }
+    catch (error) { detection.mcpIssue = error instanceof Error ? error.message : '无法检查 Playwright MCP 安装文件夹，请重新选择。'; }
   } else {
     detection.mcp = await findMcp(detection.node);
-    if (!detection.mcp) detection.issues.push('没有找到已安装的 Playwright MCP。请按安装说明安装一次，然后重新检测；插件不会自动下载或安装。');
+    if (!detection.mcp) detection.mcpIssue = '未找到 Playwright MCP。请按配置教程安装，再点击“自动检测”。';
   }
+  if (detection.nodeIssue) detection.issues.push(detection.nodeIssue);
+  if (detection.mcpIssue) detection.issues.push(detection.mcpIssue);
   return detection;
 }

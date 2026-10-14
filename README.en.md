@@ -67,34 +67,38 @@ To update manually, replace the plugin files and keep your existing `data.json`.
 
 ### 1. Install the runtime
 
-Install [Node.js](https://nodejs.org/en/download), then run this command in a terminal:
+Install the **LTS (Long Term Support)** version of [Node.js](https://nodejs.org/en/download). On Windows, press **Win + R**, enter `cmd`, and press Enter. On macOS or Linux, open Terminal. Run:
 
 ```sh
 npm install -g @playwright/mcp@0.0.83
 ```
 
-Open the plugin settings in Obsidian and select **Re-detect (重新检测)**. The plugin automatically locates installed Node.js and Playwright MCP programs, so you usually do not need to enter paths.
+On first use, both installation folder fields in the plugin settings are empty. Select **Auto-detect (自动检测)** to find Node.js and Playwright MCP and fill in their folder paths. Once both show **Found (已找到)**, select **Save configuration (保存配置)**. Saved paths remain available when you reopen settings.
 
-If Node.js is still not detected after installation, restart Obsidian. For an unusual installation location, use **Advanced: manually specify program paths (高级设置：手动指定程序路径)**.
+You can also type a path or select an installation folder with the **folder icon** beside each field. Cancelling the folder picker leaves the path unchanged. **Auto-detect checks entered paths without replacing them; only empty fields are filled automatically.** Clear a field first if you want the plugin to search for that component again.
+
+Typed, selected, and detected paths take effect only after you select **Save configuration**. Both folders are checked before saving; if saving fails, your input is kept and the previous configuration remains active. If Node.js is still not found after installation, restart Obsidian. Select **View setup tutorial (查看配置教程)** for detailed steps and folder path examples.
 
 ### 2. Install the Chrome extension
 
-Open the [Playwright extension in the Chrome Web Store](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm) using Chrome, then select **Add to Chrome**. Both the local Playwright MCP program and the browser extension are required. The plugin settings also include the installation link and steps.
+Open the [Playwright extension in the Chrome Web Store](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm) using Chrome, then select **Add to Chrome**. Both the local Playwright MCP program and the browser extension are required. **View setup tutorial** in the plugin settings includes the installation link and steps.
 
 After installation, open Chrome's **Extensions** menu (the puzzle icon) and select the Playwright extension. See the [official extension instructions](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md) for details.
 
 Sign in to X in the same Chrome profile and confirm that you can create an Article.
 
+**Auto-detect** also looks for installed Playwright extension files in Chrome's usual locations. **Found** means that installation files were located; **Test connection** establishes whether Chrome can actually connect using the enabled extension and saved token. You can save the Node.js and MCP paths even if the extension is not found.
+
 ### 3. Connect your browser
 
 1. Open the Playwright extension's status page in Chrome.
-2. Copy `PLAYWRIGHT_MCP_EXTENSION_TOKEN`.
-3. In the plugin settings, select **Link** under **Browser connection credential (浏览器连接凭据)**, create one secret, paste the token, and save the association.
-4. Select **Test connection (测试连接)**.
+2. Copy the value of `PLAYWRIGHT_MCP_EXTENSION_TOKEN`.
+3. In the plugin settings, paste it into **Browser credential (浏览器凭证) → Connection token (连接密钥)** and select **Save (保存)**.
+4. Keep Chrome open and select **Test connection (测试连接)**. Setup is complete when **Connected to Chrome (已连接到 Chrome)** appears.
 
-Testing the connection does not create an article. Obsidian's secret storage manages the credential. Once a valid credential is configured, later connections do not require you to select Allow each time.
+**Saving the token and testing the connection are separate actions.** **Saved** confirms that the token was stored, not that Chrome is connected. Save changes to the runtime configuration or token before testing. The test checks the browser connection only: it does not create an article or verify X login status or Article permissions.
 
-**One valid secret is enough.** **Change** is Obsidian's built-in control for selecting a different secret. This plugin only uses the currently selected entry; the shared list may also contain secrets used by other plugins. Update or replace it when your Chrome profile or token changes, rather than creating a secret for each article.
+Only one valid token is needed. There is no secret list to select or switch, and you do not need to enter a token for each article. If your Chrome profile or extension token changes, update and save it in the same field. Obsidian's secret storage manages the credential. Once a valid credential is configured, later connections do not require you to select Allow each time.
 
 ## Usage
 
@@ -178,6 +182,7 @@ A new save or connection test replaces the previous problem log. Copy it before 
 - Saving sends article content and images to X. Loading online images contacts their source websites.
 - Obsidian manages the browser credential. It is not written to the plugin configuration file or problem logs.
 - The plugin launches your locally installed Playwright MCP to connect to Chrome. It does not install the runtime automatically.
+- Extension detection looks only for installed extension files in Chrome's usual locations. It does not read browsing history, account details, or login credentials.
 - Problem logs are stored locally and omit the body, title, image data, and connection credential. MCP's temporary operation files may contain webpage content.
 - The plugin contains no telemetry, advertising, or AI service calls.
 

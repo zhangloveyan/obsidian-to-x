@@ -6,7 +6,8 @@ import { DraftModal } from './ui/draft-modal';
 import { SetupModal } from './ui/setup';
 import { parseNote } from './content/article';
 import { loadImage } from './assets';
-import { connectBrowser } from './browser/runtime';
+import { connectBrowser, normalizeToken } from './browser/runtime';
+import type { RuntimePaths } from './browser/discovery';
 import { saveDraft } from './browser/x-draft';
 import type { DraftSaveSession } from './browser/x-draft';
 import { DiagnosticLog } from './diagnostics';
@@ -64,6 +65,49 @@ export default class MarkdownXPublisher extends Plugin {
   async saveSettings(): Promise<void> {
     if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
     await this.saveData(this.settings);
+  }
+  async saveAutoPreview(value: boolean): Promise<void> {
+    if (this.unloaded || this.busy) throw new Error('当前操作尚未完成，请稍后再修改。');
+    this.busy = true;
+    try {
+      const next = { ...this.settings, autoPreview: value };
+      await this.saveData(next);
+      this.settings = next;
+    } finally { this.busy = false; }
+  }
+  async saveRuntimePaths(paths: RuntimePaths): Promise<void> {
+    if (this.unloaded) throw new Error('插件已停用，请重新打开设置。');
+    if (this.busy) throw new Error('正在连接浏览器或保存草稿，请完成后再保存配置。');
+    this.busy = true;
+    try {
+      const next = { ...this.settings, nodePath: paths.nodePath, mcpPath: paths.mcpPath };
+      // Keep the active pair and connection intact until both paths are persisted.
+      await this.saveData(next);
+      this.settings = next;
+      if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
+    } finally { this.busy = false; }
+  }
+
+  async saveConnectionToken(value: string): Promise<void> {
+    if (this.unloaded) throw new Error('插件已停用，请重新打开设置。');
+    if (this.busy) throw new Error('正在连接浏览器或保存草稿，请完成后再保存密钥。');
+    const token = normalizeToken(value);
+    if (!token) throw new Error('请先粘贴从 Playwright 扩展复制的密钥。');
+    const name = DEFAULT_SETTINGS.secretName;
+    const previous = this.app.secretStorage.getSecret(name) ?? '';
+    this.busy = true;
+    try {
+      // Existing custom associations remain readable; edits use the plugin's own key.
+      this.app.secretStorage.setSecret(name, token);
+      const next = { ...this.settings, secretName: name };
+      try { await this.saveData(next); }
+      catch (error) { this.app.secretStorage.setSecret(name, previous); throw error; }
+      this.settings = next;
+      if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
+    } catch {
+      // SecretStorage and persistence errors must never echo the secret value.
+      throw new Error('密钥未能保存，请重试；仍然失败时重新打开设置检查。');
+    } finally { this.busy = false; }
   }
   showSetup(): void { new SetupModal(this.app).open(); }
   showDiagnostics(): void { new DiagnosticModal(this.app, this.diagnostics).open(); }
@@ -130,7 +174,7 @@ export default class MarkdownXPublisher extends Plugin {
     try {
       await this.getBridge(this.connectionSettings());
       this.diagnostics.record('operation.completed', { operation: 'connection', elapsedMs: Date.now() - started });
-      return '已连接日常 Chrome，连接凭据有效。连接将保留供后续保存草稿使用。';
+      return '已连接到 Chrome';
     } catch (error) { this.diagnostics.fail('connection', error); await this.releaseBridge(); throw error; }
     finally { this.busy = false; await this.diagnostics.flush(); }
   }

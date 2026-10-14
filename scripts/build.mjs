@@ -12,7 +12,7 @@ const build = await context({
   absWorkingDir: root,
   entryPoints: ['src/main.ts'], outfile: 'main.js', bundle: true,
   format: 'cjs', platform: 'node', target: 'es2022', treeShaking: true,
-  external: ['obsidian', 'electron', ...builtinModules, ...builtinModules.map(name => `node:${name}`)],
+  external: ['obsidian', 'electron', '@electron/remote', ...builtinModules, ...builtinModules.map(name => `node:${name}`)],
   minify: false, sourcemap: watch ? 'inline' : false, legalComments: 'inline', metafile: true,
   loader: { '.css': 'text' },
   banner: { js: '/* Markdown X Publisher — Copyright 2026 Ancle. AGPL-3.0-only. See LICENSE and THIRD_PARTY_NOTICES.md. */' },

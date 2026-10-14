@@ -56,7 +56,7 @@
 }
 .mxp-error-line-number { flex: 0 0 5ch; color: var(--text-muted); user-select: none; }
 .mxp-error-line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.mxp-settings { max-width: 850px; }
+.mxp-settings { max-width: 760px; }
 .mxp-browser-steps { padding-inline-start: 1.5em; line-height: 1.7; overflow-wrap: anywhere; }
 .mxp-browser-steps li + li { margin-top: 6px; }
 .mxp-settings .setting-item-control input[type="text"] { width: 280px; max-width: 100%; }
@@ -68,8 +68,81 @@
   overflow-wrap: anywhere;
 }
 .mxp-connection-status { padding: 10px 12px; background: var(--background-secondary); border-radius: 8px; }
-.mxp-runtime-advanced { margin: 16px 0; }
-.mxp-runtime-advanced > summary { cursor: pointer; }
+
+/* Settings: edited paths stay separate from the active configuration. */
+.mxp-settings-title { margin: 0 0 26px; font-size: 1.4em; }
+.mxp-settings-section + .mxp-settings-section { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--background-modifier-border); }
+.mxp-settings-heading, .mxp-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mxp-settings-heading { margin-bottom: 18px; }
+.mxp-settings-heading h3 { margin: 0; font-size: var(--font-ui-medium); font-weight: 600; }
+.mxp-settings button { white-space: nowrap; min-height: 34px; }
+.mxp-settings-name { font-weight: 500; }
+.mxp-settings-muted, .mxp-install-label, .mxp-runtime-badge { font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.mxp-install-label { font-weight: normal; margin-inline-start: 9px; }
+.mxp-runtime-badge { white-space: nowrap; }
+.mxp-runtime-program + .mxp-runtime-program { margin-top: 17px; }
+.mxp-runtime-label { display: block; }
+.mxp-runtime-label > .mxp-settings-row { margin-bottom: 7px; }
+.mxp-runtime-input { position: relative; }
+.mxp-runtime-input input { width: 100%; height: 37px; padding-inline-end: 44px; font-family: var(--font-monospace); font-size: var(--font-ui-small); }
+.mxp-settings .mxp-folder-button { position: absolute; inset-inline-end: 2px; top: 2px; width: 34px; height: 33px; min-height: 0; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--text-muted); }
+.mxp-settings .mxp-folder-button:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.mxp-folder-button svg { width: 19px; height: 19px; }
+.mxp-runtime-error { margin-top: 6px; font-size: var(--font-ui-smaller); color: var(--text-error); overflow-wrap: anywhere; }
+.mxp-runtime-error[hidden] { display: none; }
+.mxp-settings .mxp-help { margin: 8px 0 0; font-size: var(--font-ui-smaller); }
+.mxp-extension-row { margin-top: 17px; }
+.mxp-runtime-summary { margin-top: 17px; padding: 10px 12px; border: 1px solid var(--background-modifier-border); border-radius: 5px; background: var(--background-secondary); font-size: var(--font-ui-small); line-height: 1.6; }
+.mxp-settings .is-warning { color: var(--text-warning); }
+.mxp-settings .is-success { color: var(--text-success); }
+.mxp-runtime-summary.is-warning { background: color-mix(in srgb, var(--text-warning) 5%, var(--background-primary)); }
+.mxp-runtime-summary.is-success { background: color-mix(in srgb, var(--text-success) 5%, var(--background-primary)); }
+.mxp-runtime-actions { margin-top: 12px; flex-wrap: wrap; }
+.mxp-settings-buttons { display: flex; gap: 10px; margin-inline-start: auto; }
+.mxp-token-section { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; }
+.mxp-token-section > .mxp-settings-heading, .mxp-token-section > .mxp-settings-row { grid-column: 1 / -1; }
+.mxp-token-section > .mxp-settings-row { margin-bottom: 7px; }
+.mxp-token-section > input { width: 100%; min-width: 0; height: 37px; }
+.mxp-token-save { align-self: end; height: 37px; }
+.mxp-test-row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 13px; }
+.mxp-test-status { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; color: var(--text-muted); font-size: var(--font-ui-small); }
+.mxp-settings-compact .mxp-settings-heading { margin: 0; }
+.mxp-settings-section > .setting-item { padding: 0; border: 0; }
+.mxp-plugin-version { margin-top: 24px; text-align: end; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+/* Configuration tutorial follows the host theme and remains scrollable. */
+.mxp-setup { font-size: var(--font-ui-small); line-height: 1.7; }
+.mxp-setup-platform { float: right; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.mxp-setup-intro { color: var(--text-muted); margin-bottom: 24px; }
+.mxp-setup-step { position: relative; padding-inline-start: 40px; }
+.mxp-setup-step + .mxp-setup-step { border-top: 1px solid var(--background-modifier-border); margin-top: 23px; padding-top: 22px; }
+.mxp-setup-step h3 { margin: 0 0 6px; font-size: var(--font-ui-medium); }
+.mxp-setup-step p { margin: 8px 0; }
+.mxp-setup-step-number { position: absolute; inset-inline-start: 0; top: 0; display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--background-modifier-border); color: var(--text-accent); background: var(--background-secondary); font-size: var(--font-ui-small); }
+.mxp-setup-step + .mxp-setup-step .mxp-setup-step-number { top: 22px; }
+.mxp-setup-purpose { font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.mxp-setup-link { display: inline-block; padding: 6px 12px; margin-top: 6px; border: 1px solid var(--background-modifier-border); border-radius: 5px; text-decoration: none; }
+.mxp-setup-instructions { padding-inline-start: 20px; }
+.mxp-setup-instructions li + li { margin-top: 7px; }
+.mxp-setup-command { margin: 12px 0; border: 1px solid var(--background-modifier-border); border-radius: 5px; overflow: hidden; }
+.mxp-setup-command pre { margin: 0; border-radius: 0; font-size: var(--font-ui-smaller); }
+.mxp-setup-command-actions { padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--background-modifier-border); }
+.mxp-setup-command-actions > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.mxp-setup-note { margin-top: 12px; padding: 10px 12px; border-inline-start: 3px solid var(--interactive-accent); background: var(--background-secondary); color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.mxp-setup-success { color: var(--text-success); }
+.mxp-setup-trouble { margin-top: 27px; padding-top: 22px; border-top: 1px solid var(--background-modifier-border); }
+.mxp-setup-trouble details { border: 1px solid var(--background-modifier-border); border-radius: 5px; margin-top: 8px; }
+.mxp-setup-trouble summary { padding: 10px 12px; cursor: pointer; }
+.mxp-setup-detail-body { padding: 0 14px 12px; font-size: var(--font-ui-smaller); }
+.mxp-setup code, .mxp-setup pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+.mxp-setup-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.mxp-setup-sources { display: flex; flex-wrap: wrap; gap: 12px; font-size: var(--font-ui-smaller); }
+@media (max-width: 480px) {
+  .mxp-settings-heading { align-items: flex-start; }
+  .mxp-install-label { display: block; margin-inline-start: 0; }
+  .mxp-test-row { align-items: flex-start; }
+  .mxp-setup-step { padding-inline-start: 34px; }
+}
+
 .modal.mxp-draft-modal, .modal.mxp-cover-modal { width: min(620px, 92vw); }
 .mxp-note-path { margin-top: 0; overflow-wrap: anywhere; }
 .mxp-draft-field { margin: 0 0 20px; }

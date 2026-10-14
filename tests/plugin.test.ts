@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import type { ParsedNote } from '../src/model';
 
 async function pluginHarness(closeFails = false) {
+  const secrets = new Map<string, string>();
   const calls: Array<{ name: string; source?: string; request?: unknown; bridgeId?: number }> = [];
   const control = {
     token: 'test-token', probeFailures: 0, saveFails: false, resumableFailure: false,
@@ -23,6 +24,7 @@ async function pluginHarness(closeFails = false) {
         export class MarkdownView { constructor(file, text) { this.file=file; this.editor={getValue:()=>text}; } }
         globalThis.MockMarkdownView = MarkdownView;
         export class Notice {} export class Setting {} export class SecretComponent {}
+        export const Platform = { isWin: true, isMacOS: false };
         export const MarkdownRenderer = {}; export const addIcon = () => {}; export const setIcon = () => {}; export const requestUrl = () => {}; export const sanitizeHTMLToDom = () => {};
       ` }));
       builder.onLoad({ filter: /[\\/]ui[\\/]draft-modal\.ts$/ }, () => ({ loader: 'js', contents: `
@@ -30,6 +32,7 @@ async function pluginHarness(closeFails = false) {
       ` }));
       builder.onLoad({ filter: /[\\/]browser[\\/]runtime\.ts$/ }, () => ({ loader: 'js', contents: `
         let nextId = 0;
+        export const normalizeToken = value => value.trim();
         export async function connectBrowser(settings, diagnostic) {
           const bridgeId = ++nextId;
           globalThis.calls.push({name:'connect',bridgeId});
@@ -70,10 +73,10 @@ async function pluginHarness(closeFails = false) {
   runInContext(bundle.outputFiles[0]!.text, context);
   const Instance = context.module.exports.default;
   const instance = new Instance();
-  instance.app = { vault: { configDir: '.obsidian' }, secretStorage: { getSecret: () => control.token } };
+  instance.app = { vault: { configDir: '.obsidian' }, secretStorage: { getSecret: (name: string) => secrets.get(name) ?? (name === 'secret' ? control.token : null), setSecret: (name: string, value: string) => { secrets.set(name, value); } } };
   instance.settings = { nodePath: '', mcpPath: 'test-cli.js', secretName: 'secret', autoPreview: true };
   instance.saveData = async () => {};
-  return { instance, calls, control, MarkdownView: context.MockMarkdownView };
+  return { instance, calls, control, secrets, MarkdownView: context.MockMarkdownView };
 }
 
 function deferred() {
@@ -278,4 +281,74 @@ test('draft confirmation uses the preview editor buffer and ignores a source vie
   leaves = [{ view: first }];
   await instance.openDraft(file, previewSource);
   assert.equal((calls.at(-1)?.request as ParsedNote).title, 'First editor');
+});
+
+test('runtime paths become active together only after persistence succeeds; failed writes retain the connection', async () => {
+  const { instance, calls } = await pluginHarness();
+  await instance.testConnection();
+  const original = { ...instance.settings };
+  const gate = deferred();
+  const started = deferred();
+  let persisted: unknown;
+  instance.saveData = async (value: unknown) => { persisted = value; started.resolve(); await gate.promise; };
+  const saving = instance.saveRuntimePaths({ nodePath: 'node-directory', mcpPath: 'mcp-directory' });
+  await started.promise;
+  assert.equal(instance.busy, true);
+  assert.deepEqual(instance.settings, original);
+  assert.equal(calls.filter(call => call.name === 'close').length, 0);
+  await assert.rejects(instance.testConnection(), /请稍候/);
+  gate.resolve(); await saving;
+  assert.equal(instance.settings.nodePath, 'node-directory');
+  assert.equal(instance.settings.mcpPath, 'mcp-directory');
+  assert.equal(instance.settings, persisted);
+  assert.equal(calls.filter(call => call.name === 'close').length, 1);
+  await instance.testConnection();
+  const saved = instance.settings;
+  instance.saveData = async () => { throw new Error('disk unavailable'); };
+  await assert.rejects(instance.saveRuntimePaths({ nodePath: 'other-node', mcpPath: 'other-mcp' }), /disk unavailable/);
+  assert.equal(instance.settings, saved);
+  assert.equal(instance.busy, false);
+  assert.equal(calls.filter(call => call.name === 'close').length, 1);
+});
+
+test('single-key editing preserves a legacy shared credential and never writes token values to plugin preferences', async () => {
+  const { instance, secrets, calls } = await pluginHarness();
+  await instance.testConnection();
+  assert.equal(instance.connectionSettings().token, 'test-token');
+  let persisted: unknown;
+  instance.saveData = async (value: unknown) => { persisted = value; };
+  await instance.saveConnectionToken(' new-private-token ');
+  assert.equal(instance.connectionSettings().token, 'new-private-token');
+  assert.equal(instance.app.secretStorage.getSecret('secret'), 'test-token');
+  assert.equal(secrets.get(instance.settings.secretName), 'new-private-token');
+  assert.doesNotMatch(JSON.stringify(persisted), /new-private-token|test-token/);
+  assert.equal(calls.filter(call => call.name === 'close').length, 1);
+  await instance.testConnection();
+  const previous = instance.settings;
+  instance.saveData = async () => { throw new Error('failed write containing new-value'); };
+  await assert.rejects(instance.saveConnectionToken('new-value'), error => {
+    assert.match(String(error), /密钥未能保存/);
+    assert.doesNotMatch(String(error), /new-value/);
+    return true;
+  });
+  assert.equal(instance.settings, previous);
+  assert.equal(instance.connectionSettings().token, 'new-private-token');
+  assert.equal(calls.filter(call => call.name === 'close').length, 1);
+});
+
+test('preview preference persistence is serialized with runtime and credential changes', async () => {
+  const { instance } = await pluginHarness();
+  const gate = deferred(), started = deferred();
+  instance.saveData = async () => { started.resolve(); await gate.promise; };
+  const saving = instance.saveAutoPreview(false);
+  await started.promise;
+  assert.equal(instance.settings.autoPreview, true);
+  await assert.rejects(instance.saveRuntimePaths({ nodePath: 'node', mcpPath: 'mcp' }), /完成后/);
+  await assert.rejects(instance.saveConnectionToken('replacement'), /完成后/);
+  gate.resolve(); await saving;
+  assert.equal(instance.settings.autoPreview, false);
+  instance.saveData = async () => { throw new Error('disk unavailable'); };
+  await assert.rejects(instance.saveAutoPreview(true), /disk unavailable/);
+  assert.equal(instance.settings.autoPreview, false);
+  assert.equal(instance.busy, false);
 });

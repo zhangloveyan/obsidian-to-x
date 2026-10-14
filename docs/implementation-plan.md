@@ -15,6 +15,8 @@ The supported environment is desktop Obsidian 1.11.7 or later, Node.js 18 or lat
 | `src/main.ts`, `src/settings.ts` | Obsidian lifecycle, commands, configuration and connection reuse |
 | `src/model.ts`, `src/content/` | Note parsing, image preparation, content types and X wire serialization |
 | `src/browser/runtime.ts`, `src/browser/discovery.ts` | Official MCP connection and detection of installed Node/MCP programs |
+| `src/browser/extension.ts` | Locate official Playwright extension installation files in standard Chrome profile directories |
+| `src/ui/setup.ts`, `src/ui/folder-picker.ts` | Platform-specific configuration tutorial and native installation-folder selection |
 | `src/browser/x-page.ts` | Current page/editor inspection, native file submission and media reconciliation |
 | `src/browser/article-controls.ts` | Draft creation through the observed X button contract |
 | `src/browser/media-upload.ts` | Serial uploads, identity matching, readiness checks and in-memory upload progress |
@@ -59,9 +61,17 @@ Cover confirmation opens a Cropper.js dialog with a fixed 5:2 frame, dragging an
 
 ## Credentials, diagnostics and distribution
 
-The Chrome extension token is stored through Obsidian `SecretStorage`; preferences store only the selected secret name. Runtime discovery checks installed programs and never runs an installer. The plugin uses official extension mode rather than scraping Chrome profile data or requiring a remote debugging port.
+The Chrome extension token is stored through Obsidian `SecretStorage`; preferences store only its secret name, never the token value. Existing secret associations remain readable. Saving a replacement uses the plugin's own secret entry, without exposing a shared secret list or changing unrelated entries. Runtime discovery checks installed programs and never runs an installer. The plugin uses official extension mode and does not require a remote debugging port.
 
-Settings and the setup dialog share Chrome extension installation steps and the official store link. One selected browser secret is sufficient; Obsidian's native Link/Change control selects its association from shared secret storage. The plugin does not rotate secrets or use multiple entries concurrently.
+The confirmed settings layout has runtime configuration, one browser credential, problem logs, automatic preview refresh, and the current manifest version in the lower-right corner. The runtime heading contains **View setup tutorial (查看配置教程)**. **Auto-detect (自动检测)** sits to the left of **Save configuration (保存配置)** below the path fields. Installation instructions live in `src/ui/setup.ts`, with four steps for Node LTS, the tested MCP version, Chrome extension installation, and copying/saving/testing the token. The tutorial adapts download, terminal-opening and path instructions to Windows, macOS or Linux and includes expandable troubleshooting.
+
+`src/settings.ts` keeps the runtime form separate from persisted settings. On first use both folder fields are empty. Auto-detect validates nonempty paths without replacing them, searches only empty fields and fills discovered directories without saving. Users may type a folder or open the native directory picker through its folder icon; selection updates the same field, and cancellation leaves it unchanged. `src/ui/folder-picker.ts` opens the system dialog and reports failure with a manual-entry alternative. `src/browser/discovery.ts` resolves directories to the Node executable and official MCP entry point while retaining compatibility with previously saved executable paths.
+
+**Save configuration** validates both runtime paths and persists them together before changing the active configuration. Failed checks or persistence retain the entered values and previous active configuration. `src/main.ts` serializes configuration changes with browser operations; runtime, token and preview preference changes use atomic persistence before adopting new settings. The settings UI ignores stale detection results after edits or navigation, and synchronizes newly completed saves when returning to settings without overwriting locally edited fields. Browser tests require the current runtime and token edits to be saved first.
+
+`src/browser/extension.ts` searches standard Chrome channel/profile directories for the official extension ID and readable installation manifests. This reads extension files only, not browser preferences, history, account data or login credentials. **Found** establishes installed files, not extension enablement, token validity or browser usability. Missing extension files do not block runtime-path saving. The separate **Test connection (测试连接)** action establishes the actual Chrome connection through MCP; it neither creates an article nor checks X login or Article permissions.
+
+The credential section contains one masked token input, **Save (保存)** and the separate connection-test button. A saved token is reused; saving does not claim that a connection succeeded. There is no Link/Change selector, key rotation or concurrent use of multiple entries. Secret persistence failures restore the previous stored value, and error messages do not include the submitted token.
 
 Local diagnostics record stages, timing, counts and controlled error categories. Logs exclude article text, file paths, image bytes and credentials, and are bounded to 128 KiB or 1000 entries. There is no telemetry, remote configuration download or self-update mechanism.
 
@@ -70,5 +80,7 @@ The application is licensed under [AGPL-3.0-only](../LICENSE). Build-generated [
 ## Maintenance and verification
 
 Run `npm run package` to execute TypeScript, production build, ESLint, tests and packaging. Relevant regressions must cover formatting and Unicode boundaries, image identity changes, delayed binding, editor remounts, interrupted uploads, request/page mismatches, cover separation and final reload verification. Serialized browser functions must also execute when extracted from the production bundle.
+
+Settings acceptance covers the first-use empty form, directory selection/cancellation, preservation of typed paths during detection, independent results for the three components, explicit saving before activation, and retention of the old configuration after validation or persistence failure. Exercise editing or leaving settings while detection is pending, returning while a save completes, busy-state mutation guards, and preserving unsaved token input during runtime detection. Verify one-secret migration without plaintext tokens in `data.json`, separate saved/connected states, tutorial links and platform instructions, preview preference persistence, log access and the manifest-derived version footer. Connection success needs a real browser test; locating extension files alone is not evidence of connectivity.
 
 Local simulations establish failure handling and data invariants. Real X runs provide separate compatibility evidence; diagnostic completion must not be presented as an independent visual inspection of every supported format. Current results and remaining limits are recorded in [validation.md](validation.md). Follow [releasing.md](releasing.md) for release packaging and community-directory submission.
