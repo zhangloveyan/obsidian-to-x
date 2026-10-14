@@ -1,12 +1,12 @@
 # Verification record
 
-Version: **0.1.19**. Updated: **2026-10-14**. Timestamps below use UTC.
+Version: **0.1.20**. Updated: **2026-10-14**. Timestamps below use UTC.
 
 ## Build and automated checks
 
-`npm run package` passed TypeScript, the production build, whole-project ESLint and **197 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+A clean `npm ci` and `npm run package` for 0.1.20 passed TypeScript, the production build, whole-project ESLint and **212 tests** on Windows. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`. The manual-install ZIP contains only those five files under `markdown-x-publisher/`.
 
-For the 0.1.19 release, a clean `npm ci` and `npm run package` passed on Windows. GitHub's [Ubuntu check](https://github.com/zhangloveyan/obsidian-to-x/actions/runs/38519361208) also passed for release commit `8376c41`. The public [0.1.19 release](https://github.com/zhangloveyan/obsidian-to-x/releases/tag/0.1.19) includes all five plugin files and the manual-install ZIP; all six GitHub asset SHA-256 digests match the locally generated files. Community-directory review of this version has not yet been verified.
+For the 0.1.19 release, a clean `npm ci` and `npm run package` passed on Windows. GitHub's [Ubuntu check](https://github.com/zhangloveyan/obsidian-to-x/actions/runs/38519361208) also passed for release commit `8376c41`. The public [0.1.19 release](https://github.com/zhangloveyan/obsidian-to-x/releases/tag/0.1.19) includes all five plugin files and the manual-install ZIP; all six GitHub asset SHA-256 digests match the locally generated files. Community review subsequently failed on two manually created settings headings; 0.1.20 replaces both with the required native heading API.
 
 The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplied that alias inside each VM, preserving isolation from the host global object, and passed GitHub's Ubuntu build, lint and 157 tests. The affected tests still exercise real SDK child-process behavior. It also added an English README with a separate Chinese translation without changing application behavior.
 
@@ -29,6 +29,8 @@ The current test suite covers:
 The page adapters were also extracted from in-memory production bundles and executed in isolated VMs. Checks confirm that serialized browser code executes without host closures, repeated upload tokens submit once, exact file bytes are retained, the cover input is excluded, and navigation or editor replacement stops submission. Ambiguous, disabled or unsuitable dialog inputs are rejected. Removing a known pre-submission blocker allows the same token to be tried safely. These are local simulations, not live X UI tests.
 
 ## Settings configuration verification
+
+The 0.1.20 settings changes passed `npm run check` on 2026-10-14 (TypeScript, production build, ESLint and **212 tests**). Nine settings-event tests cover automatic checks of saved paths on reopening, stale-result protection, unavailable directories, busy-state deferral, saves completing across pane navigation, and session test-result display. Six additional plugin lifecycle tests cover in-memory test results, actual configuration-change invalidation, failed credential-save rollback, external secret replacement and unload. The isolated Chromium settings harness passed **16 interaction groups** with no page errors, including the new reopening scenarios. These checks used simulated browser connections; no live X draft was created. Settings headings use Obsidian's native Setting heading API, and the community review's no-manual-HTML-heading rule is now enforced locally.
 
 The local settings update implements the approved empty-first-use form, explicit runtime-path saving, single-token editor, installation tutorial and manifest-derived version footer. Tests cover directory and legacy executable-path compatibility, invalid manual overrides without fallback, independent runtime errors, official MCP package/entry validation, extension installation detection, and the native directory dialog's selection, cancellation and failure behavior.
 
@@ -59,6 +61,8 @@ This verifies the DOM upload sequence against the current X interface. It was a 
 Version 0.1.16 fixes initial crop scaling. A local browser harness using the production crop modal and Cropper.js reproduced a landscape image opening at 104% before the fix. After the fix, 800×440 landscape, 420×800 portrait and 1200×300 wide fixtures all opened centered at 100%, with the shrink button disabled and no empty area inside the frame. Landscape and portrait image widths matched the frame; the wide image matched its height. Manual zoom and movement still worked, applying produced a 620×248 PNG, and reopening restored the exact adjusted canvas and 120% zoom. This used an Obsidian DOM shim and synthetic images; it was not a live Obsidian application check.
 
 ## Installed artifacts
+
+The 0.1.20 release build was copied into the existing local plugin directory on 2026-10-14. All five installed SHA-256 hashes matched the package; the existing `data.json` hash was unchanged. Reload the plugin to activate the updated files.
 
 The released 0.1.19 files were copied into the existing local plugin directory on 2026-10-14. All five installed SHA-256 hashes matched the release package; `data.json` was unchanged.
 

@@ -8,3 +8,5 @@ data.json
 .env.*
 *.log
 .DS_Store
+# Original screenshot contains partially visible credential text; publish the redacted copy.
+pic/README/image-20261014141226524.png

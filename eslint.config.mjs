@@ -9,7 +9,8 @@ export default ts.config(
   ...ts.configs.recommended,
   { files: ['src/**/*.ts'], plugins: { obsidianmd }, rules: {
     'obsidianmd/no-static-styles-assignment': 'error',
-    'obsidianmd/no-forbidden-elements': 'error'
+    'obsidianmd/no-forbidden-elements': 'error',
+    'obsidianmd/settings-tab/no-manual-html-headings': 'error'
   } },
   { files: ['**/*.ts'], languageOptions: { globals: { ...globals.node, ...globals.browser } }, rules: {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],

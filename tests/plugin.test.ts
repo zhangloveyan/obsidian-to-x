@@ -352,3 +352,117 @@ test('preview preference persistence is serialized with runtime and credential c
   assert.equal(instance.settings.autoPreview, false);
   assert.equal(instance.busy, false);
 });
+
+test('connection test results survive asynchronous completion without a settings pane and track later failures', async () => {
+  const { instance, control } = await pluginHarness();
+  const gate = deferred(), started = deferred();
+  control.connectGate = gate.promise;
+  control.connectStarted = started.resolve;
+  assert.equal(instance.connectionTestResult(), null);
+  const testing = instance.testConnection();
+  await started.promise;
+  assert.equal(instance.connectionTestResult(), 'testing');
+  await assert.rejects(instance.testConnection(), /请稍候/);
+  assert.equal(instance.connectionTestResult(), 'testing');
+  gate.resolve(); await testing;
+  assert.equal(instance.connectionTestResult(), 'passed');
+  control.probeFailures = 2;
+  await assert.rejects(instance.testConnection(), /stale connection/);
+  assert.equal(instance.connectionTestResult(), 'failed');
+  await instance.testConnection();
+  assert.equal(instance.connectionTestResult(), 'passed');
+});
+
+test('same-value saves and preview changes retain test results without persisting test state or credentials', async () => {
+  const { instance } = await pluginHarness();
+  const persisted: unknown[] = [];
+  instance.saveData = async (value: unknown) => { persisted.push(JSON.parse(JSON.stringify(value))); };
+  await instance.testConnection();
+  await instance.saveRuntimePaths({ nodePath: instance.settings.nodePath, mcpPath: instance.settings.mcpPath });
+  assert.equal(instance.connectionTestResult(), 'passed');
+  await instance.saveConnectionToken(' test-token ');
+  assert.equal(instance.connectionTestResult(), 'passed');
+  await instance.saveAutoPreview(false);
+  assert.equal(instance.connectionTestResult(), 'passed');
+  await instance.saveSettings();
+  assert.equal(instance.connectionTestResult(), 'passed');
+  for (const saved of persisted) {
+    assert.deepEqual(Object.keys(saved as object).sort(), ['autoPreview', 'mcpPath', 'nodePath', 'secretName']);
+    assert.doesNotMatch(JSON.stringify(saved), /test-token|passed|testing/);
+  }
+});
+
+test('saved connection changes invalidate prior results even when restored to previously tested values', async () => {
+  const { instance } = await pluginHarness();
+  for (const key of ['nodePath', 'mcpPath']) {
+    await instance.testConnection();
+    const previous = { nodePath: instance.settings.nodePath, mcpPath: instance.settings.mcpPath };
+    await instance.saveRuntimePaths({ ...previous, [key]: 'different-directory' });
+    assert.equal(instance.connectionTestResult(), null);
+    await instance.saveRuntimePaths(previous);
+    assert.equal(instance.connectionTestResult(), null);
+  }
+  await instance.testConnection();
+  await instance.saveConnectionToken('replacement-token');
+  assert.equal(instance.connectionTestResult(), null);
+  await instance.saveConnectionToken('test-token');
+  assert.equal(instance.connectionTestResult(), null);
+});
+
+test('failed persistence retains the old test result even if read while the secret write is provisional', async () => {
+  const { instance } = await pluginHarness();
+  await instance.saveConnectionToken('test-token');
+  await instance.testConnection();
+  instance.saveData = async () => { throw new Error('disk unavailable'); };
+  await assert.rejects(instance.saveRuntimePaths({ nodePath: 'different-node', mcpPath: 'different-mcp' }), /disk unavailable/);
+  assert.equal(instance.connectionTestResult(), 'passed');
+  const gate = deferred(), started = deferred();
+  instance.saveData = async () => { started.resolve(); await gate.promise; throw new Error('disk unavailable'); };
+  const saving = instance.saveConnectionToken('provisional-secret');
+  await started.promise;
+  assert.equal(instance.connectionTestResult(), null);
+  gate.resolve();
+  await assert.rejects(saving, /密钥未能保存/);
+  assert.equal(instance.connectionSettings().token, 'test-token');
+  assert.equal(instance.connectionTestResult(), 'passed');
+});
+
+test('external credential replacement invalidates history and a late test cannot assign its failure to new settings', async () => {
+  const { instance, control } = await pluginHarness();
+  await instance.testConnection();
+  control.token = 'external-change';
+  assert.equal(instance.connectionTestResult(), null);
+  control.token = 'test-token';
+  assert.equal(instance.connectionTestResult(), null);
+  const gate = deferred(), started = deferred();
+  control.token = 'next-token';
+  control.connectGate = gate.promise;
+  control.connectStarted = started.resolve;
+  const testing = instance.testConnection();
+  await started.promise;
+  assert.equal(instance.connectionTestResult(), 'testing');
+  control.token = 'changed-during-test';
+  assert.equal(instance.connectionTestResult(), null);
+  gate.resolve();
+  await assert.rejects(testing, /设置已更改/);
+  assert.equal(instance.connectionTestResult(), null);
+});
+
+test('test results are cleared by unload and absent in new plugin instances, including late completion', async () => {
+  const first = await pluginHarness();
+  await first.instance.testConnection();
+  first.instance.onunload();
+  assert.equal(first.instance.connectionTestResult(), null);
+  const { instance, control } = await pluginHarness();
+  assert.equal(instance.connectionTestResult(), null);
+  const gate = deferred(), started = deferred();
+  control.connectGate = gate.promise;
+  control.connectStarted = started.resolve;
+  const testing = instance.testConnection();
+  await started.promise;
+  instance.onunload();
+  assert.equal(instance.connectionTestResult(), null);
+  gate.resolve();
+  await assert.rejects(testing, /停用/);
+  assert.equal(instance.connectionTestResult(), null);
+});

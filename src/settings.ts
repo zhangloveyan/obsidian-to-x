@@ -41,14 +41,16 @@ export class PublisherSettingTab extends PluginSettingTab {
     const alive = () => generation === this.generation;
     const root = this.containerEl;
     root.empty(); root.addClass('mxp-settings');
-    root.createEl('h2', { cls: 'mxp-settings-title', text: this.publisher.manifest.name });
+    new Setting(root).setName(this.publisher.manifest.name).setHeading().setClass('mxp-settings-title');
     let savedPaths: RuntimePaths = {
       nodePath: cleanRuntimeDirectory(this.publisher.settings.nodePath, 'node'),
       mcpPath: cleanRuntimeDirectory(this.publisher.settings.mcpPath, 'mcp')
     };
     let savedToken = this.publisher.connectionSettings().token;
-    let operation: 'detect' | 'save' | 'token' | 'test' | 'preview' | null = null;
+    let operation: 'check' | 'detect' | 'save' | 'token' | 'test' | 'preview' | null = null;
     let revision = 0;
+    let scanRevision: number | null = null;
+    let savedCheckPending = true;
     let picking = false;
     let extensionFound: boolean | null = null;
     const checks: Partial<Record<PathKey, PathCheck>> = {};
@@ -62,9 +64,8 @@ export class PublisherSettingTab extends PluginSettingTab {
     };
     const section = (title: string) => {
       const content = root.createDiv({ cls: 'mxp-settings-section' });
-      const heading = content.createDiv({ cls: 'mxp-settings-heading' });
-      heading.createEl('h3', { text: title });
-      return { content, heading };
+      const heading = new Setting(content).setName(title).setHeading().setClass('mxp-settings-heading');
+      return { content, heading: heading.controlEl };
     };
     const environment = section('运行环境');
     button(environment.heading, '查看配置教程').onclick = () => this.publisher.showSetup();
@@ -135,8 +136,18 @@ export class PublisherSettingTab extends PluginSettingTab {
     const paths = (): RuntimePaths => ({ nodePath: clean(fields.nodePath.input.value), mcpPath: clean(fields.mcpPath.input.value) });
     const configured = () => Boolean(savedPaths.nodePath && savedPaths.mcpPath);
     const dirty = () => !configured() || pathKeys.some(key => paths()[key] !== savedPaths[key]);
+    let observedTestResult = this.publisher.connectionTestResult();
+    const renderTestStatus = () => {
+      observedTestResult = this.publisher.connectionTestResult();
+      if (dirty()) stateText(testStatus, '请先保存运行环境配置');
+      else if (!normalizeToken(savedToken) || tokenInput.value !== savedToken) stateText(testStatus, '请先保存密钥，再测试连接');
+      else if (observedTestResult === 'testing') stateText(testStatus, '正在连接 Chrome…');
+      else if (observedTestResult === 'passed') stateText(testStatus, '✓ 上次测试通过', 'success');
+      else if (observedTestResult === 'failed') stateText(testStatus, '上次测试未通过，请重试', 'warning');
+      else stateText(testStatus, '密钥已保存，可测试连接');
+    };
     const controls = () => {
-      const locked = this.publisher.busy || (operation !== null && operation !== 'detect');
+      const locked = this.publisher.busy || (operation !== null && operation !== 'detect' && operation !== 'check');
       for (const key of pathKeys) { fields[key].input.disabled = locked; fields[key].picker.disabled = locked || picking; }
       detectButton.disabled = !!operation || this.publisher.busy || picking;
       saveRuntimeButton.disabled = !!operation || this.publisher.busy || picking || !dirty() || !pathKeys.some(key => paths()[key]);
@@ -150,19 +161,22 @@ export class PublisherSettingTab extends PluginSettingTab {
     };
     const render = () => {
       const current = paths();
+      const scanning = scanRevision === revision;
       for (const key of pathKeys) {
         const check = checks[key]?.value === current[key] ? checks[key] : undefined;
         const changed = current[key] !== savedPaths[key] || !configured();
-        stateText(fields[key].status, check?.found ? `✓ 已找到${changed ? '，待保存' : ''}` : check?.error ? (current[key] ? '目录不可用' : '未找到') : current[key] ? '待检查' : '待查找', check?.found ? 'success' : 'warning');
+        stateText(fields[key].status, scanning ? '检查中…' : check?.found ? `✓ 已找到${changed ? '，待保存' : ''}` : check?.error ? (current[key] ? '目录不可用' : '未找到') : current[key] ? (changed ? '待检查' : '已配置') : '待查找', scanning ? '' : check?.found ? 'success' : check?.error || changed ? 'warning' : '');
         fields[key].status.title = check?.version ?? '';
         fields[key].error.setText(check?.error ?? ''); fields[key].error.hidden = !check?.error;
       }
-      stateText(extensionStatus, extensionFound === null ? '待检测' : extensionFound ? '✓ 已找到' : '未找到', extensionFound ? 'success' : 'warning');
+      const checkingExtension = scanning && operation !== 'save';
+      stateText(extensionStatus, checkingExtension ? '检查中…' : extensionFound === null ? '待检测' : extensionFound ? '✓ 已找到' : '未找到', checkingExtension ? '' : extensionFound ? 'success' : 'warning');
       stateText(savedStatus, dirty() ? (configured() || current.nodePath || current.mcpPath ? '未保存' : '尚未配置') : '已保存', dirty() ? 'warning' : '');
       const failed = pathKeys.some(key => checks[key]?.value === current[key] && checks[key]?.error);
       const found = pathKeys.every(key => checks[key]?.value === current[key] && checks[key]?.found);
       if (this.publisher.busy && !operation) stateText(summary, '正在连接浏览器或保存草稿，完成后可修改配置。', 'warning');
-      else if (failed) stateText(summary, `请修正标出的目录。${configured() ? '原有配置继续有效。' : ''}`, 'warning');
+      else if (scanning && operation === 'check') stateText(summary, '正在检查已保存的运行环境…');
+      else if (failed) stateText(summary, dirty() ? '请修正标出的目录，已保存的路径保持不变。' : '已保存的运行环境不可用，请修正标出的目录。', 'warning');
       else if (dirty()) stateText(summary, found ? 'Node.js 和 Playwright MCP 已找到，请保存配置。' : current.nodePath || current.mcpPath ? '路径已修改，保存配置后生效。' : '请点击“自动检测”，或选择安装文件夹。', 'warning');
       else if (found && extensionFound) stateText(summary, '✓ 三项已找到，环境已就绪', 'success');
       else stateText(summary, extensionFound === false ? '运行路径已保存；未找到 Playwright 扩展，请查看配置教程。' : '运行路径已保存，可以测试连接。', extensionFound === false ? 'warning' : '');
@@ -170,13 +184,13 @@ export class PublisherSettingTab extends PluginSettingTab {
     };
     const changed = (key: PathKey) => {
       ++revision; delete checks[key]; render();
-      stateText(testStatus, dirty() ? '请先保存运行环境配置' : '尚未测试连接');
+      renderTestStatus();
     };
     for (const key of pathKeys) {
       fields[key].input.oninput = () => changed(key);
       fields[key].picker.onclick = async event => {
         event.preventDefault();
-        if (this.publisher.busy || picking || (operation && operation !== 'detect')) return;
+        if (this.publisher.busy || picking || (operation && operation !== 'detect' && operation !== 'check')) return;
         picking = true; controls();
         try {
           const chosen = await chooseRuntimeFolder(`选择 ${pathNames[key]} 安装文件夹`, paths()[key]);
@@ -185,16 +199,18 @@ export class PublisherSettingTab extends PluginSettingTab {
         finally { picking = false; if (alive()) controls(); }
       };
     }
-    const detect = async (save: boolean) => {
+    const detect = async (save: boolean, verifySaved = false) => {
       if (operation || this.publisher.busy || picking) return;
+      if (verifySaved && (!configured() || dirty())) return;
       const snapshot = paths(), ticket = ++revision;
-      operation = save ? 'save' : 'detect'; controls();
-      for (const key of pathKeys) stateText(fields[key].status, '检查中…');
+      scanRevision = ticket;
+      operation = save ? 'save' : verifySaved ? 'check' : 'detect'; render();
       try {
         const [found, extension] = await Promise.all([
           detectRuntime(snapshot), save ? Promise.resolve(null) : detectChromeExtension()
         ]);
         if (!alive() || ticket !== revision) return;
+        scanRevision = null;
         if (extension) extensionFound = extension.found;
         const programs = { nodePath: found.node, mcpPath: found.mcp };
         const errors: Record<PathKey, string | undefined> = { nodePath: found.nodeIssue, mcpPath: found.mcpIssue };
@@ -202,7 +218,7 @@ export class PublisherSettingTab extends PluginSettingTab {
         const next: RuntimePaths = { ...snapshot };
         for (const key of pathKeys) {
           if (!next[key] && programs[key]) next[key] = programs[key]!.directory;
-          if (!save && !snapshot[key]) fields[key].input.value = next[key];
+          if (!save && !verifySaved && !snapshot[key]) fields[key].input.value = next[key];
           checks[key] = { value: paths()[key], found: Boolean(programs[key] && paths()[key]), error: errors[key], version: programs[key]?.version };
         }
         if (save && complete) {
@@ -213,25 +229,33 @@ export class PublisherSettingTab extends PluginSettingTab {
             fields[key].input.value = next[key];
             checks[key] = { value: next[key], found: true, version: programs[key]?.version };
           }
-          stateText(testStatus, '尚未测试连接');
-        } else if (dirty()) stateText(testStatus, '请先保存运行环境配置');
+          savedCheckPending = false;
+          renderTestStatus();
+        } else if (dirty()) renderTestStatus();
         render();
-        if (save && !complete) stateText(summary, `保存失败，请修正标出的目录。${configured() ? '原有配置继续有效。' : ''}`, 'warning');
+        if (save && !complete) stateText(summary, '保存失败，请修正标出的目录。已保存的路径保持不变。', 'warning');
       } catch (error) {
         if (alive() && ticket === revision) {
+          scanRevision = null;
           render();
-          stateText(summary, save ? `配置未能保存，请重试。${configured() ? '原有配置继续有效。' : ''}` : `检测未完成：${error instanceof Error ? error.message : '请重试。'}`, 'warning');
+          stateText(summary, save ? '配置未能保存，请重试。已保存的路径保持不变。' : `检测未完成：${error instanceof Error ? error.message : '请重试。'}`, 'warning');
         }
       } finally {
         operation = null;
+        scanRevision = null;
         if (alive()) { if (ticket !== revision) render(); else controls(); }
       }
     };
     detectButton.onclick = () => { void detect(false); };
     saveRuntimeButton.onclick = () => { void detect(true); };
+    const verifySavedPaths = () => {
+      if (!savedCheckPending || !configured() || dirty() || operation || this.publisher.busy || picking) return;
+      savedCheckPending = false;
+      void detect(false, true);
+    };
     tokenInput.oninput = () => {
       stateText(tokenStatus, tokenInput.value === savedToken ? (savedToken ? '已保存' : '尚未填写') : '未保存', tokenInput.value === savedToken ? '' : 'warning');
-      stateText(testStatus, dirty() ? '请先保存运行环境配置' : tokenInput.value === savedToken ? '尚未测试连接' : '请先保存密钥，再测试连接');
+      renderTestStatus();
     };
     saveTokenButton.onclick = async () => {
       if (operation || this.publisher.busy) return;
@@ -240,7 +264,7 @@ export class PublisherSettingTab extends PluginSettingTab {
         await this.publisher.saveConnectionToken(tokenInput.value);
         if (!alive()) return;
         savedToken = this.publisher.connectionSettings().token; tokenInput.value = savedToken;
-        stateText(tokenStatus, '已保存'); stateText(testStatus, dirty() ? '请先保存运行环境配置' : '尚未测试连接');
+        stateText(tokenStatus, '已保存'); renderTestStatus();
       } catch (error) { if (alive()) stateText(testStatus, error instanceof Error ? error.message : '密钥未能保存，请重试。', 'warning'); }
       finally { operation = null; if (alive()) controls(); }
     };
@@ -251,10 +275,11 @@ export class PublisherSettingTab extends PluginSettingTab {
       operation = 'test'; controls(); stateText(testStatus, '正在连接 Chrome…');
       try { await this.publisher.testConnection(); if (alive()) stateText(testStatus, '✓ 已连接到 Chrome', 'success'); }
       catch (error) { if (alive()) stateText(testStatus, `连接失败：${error instanceof Error ? error.message : '请打开 Chrome，检查扩展和密钥后重试。'}`, 'warning'); }
-      finally { operation = null; if (alive()) controls(); }
+      finally { operation = null; if (alive()) { observedTestResult = this.publisher.connectionTestResult(); controls(); } }
     };
-    stateText(testStatus, dirty() ? '请先保存运行环境配置' : '尚未测试连接');
+    renderTestStatus();
     render();
+    verifySavedPaths();
     let busyNoticeShown = this.publisher.busy;
     this.refreshTimer = window.setInterval(() => {
       if (!alive()) return;
@@ -267,6 +292,7 @@ export class PublisherSettingTab extends PluginSettingTab {
         };
         const latestToken = this.publisher.connectionSettings().token;
         if (pathKeys.some(key => savedPaths[key] !== latest[key]) || savedToken !== latestToken) {
+          if (pathKeys.some(key => savedPaths[key] !== latest[key])) savedCheckPending = true;
           for (const key of pathKeys) {
             if (paths()[key] === savedPaths[key]) fields[key].input.value = latest[key];
             if (savedPaths[key] !== latest[key]) delete checks[key];
@@ -274,7 +300,7 @@ export class PublisherSettingTab extends PluginSettingTab {
           if (tokenInput.value === savedToken) tokenInput.value = latestToken;
           savedPaths = latest; savedToken = latestToken;
           stateText(tokenStatus, tokenInput.value === savedToken ? (savedToken ? '已保存' : '尚未填写') : '未保存');
-          stateText(testStatus, dirty() ? '请先保存运行环境配置' : '尚未测试连接');
+          renderTestStatus();
           render();
         }
         updatePreviewValue(this.publisher.settings.autoPreview);
@@ -282,6 +308,8 @@ export class PublisherSettingTab extends PluginSettingTab {
       if (!operation && this.publisher.busy !== busyNoticeShown) {
         busyNoticeShown = this.publisher.busy; render();
       } else controls();
+      if (!operation && observedTestResult !== this.publisher.connectionTestResult()) renderTestStatus();
+      verifySavedPaths();
     }, 250);
   }
 }

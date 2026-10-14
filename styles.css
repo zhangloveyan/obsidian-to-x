@@ -70,11 +70,12 @@
 .mxp-connection-status { padding: 10px 12px; background: var(--background-secondary); border-radius: 8px; }
 
 /* Settings: edited paths stay separate from the active configuration. */
-.mxp-settings-title { margin: 0 0 26px; font-size: 1.4em; }
+.mxp-settings-title { margin: 0 0 26px; padding: 0; border: 0; }
+.mxp-settings-title .setting-item-name { font-size: 1.4em; font-weight: 600; }
 .mxp-settings-section + .mxp-settings-section { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--background-modifier-border); }
 .mxp-settings-heading, .mxp-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mxp-settings-heading { margin-bottom: 18px; }
-.mxp-settings-heading h3 { margin: 0; font-size: var(--font-ui-medium); font-weight: 600; }
+.mxp-settings-heading .setting-item-name { margin: 0; font-size: var(--font-ui-medium); font-weight: 600; }
 .mxp-settings button { white-space: nowrap; min-height: 34px; }
 .mxp-settings-name { font-weight: 500; }
 .mxp-settings-muted, .mxp-install-label, .mxp-runtime-badge { font-size: var(--font-ui-smaller); color: var(--text-muted); }

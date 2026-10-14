@@ -65,40 +65,65 @@
 
 ## 首次配置
 
-### 1. 安装运行环境
+### 1. 安装 Node.js
 
-安装 [Node.js](https://nodejs.org/en/download) 的 **LTS（长期支持版）**。Windows 用户按 **Win + R**，输入 `cmd` 并按回车；macOS 或 Linux 用户打开终端，然后运行：
+打开 [Node.js 官方下载页面](https://nodejs.org/en/download)，选择 **LTS（长期支持版）**：
+
+- **Windows**：下载 `.msi` 安装程序，双击并按提示安装，保留默认选项。
+- **macOS**：下载 `.pkg` 安装程序，双击并按提示安装。
+- **Linux**：按下载页面中对应系统的说明安装。
+
+### 2. 安装 Playwright MCP
+
+Windows 用户按 **Win + R**，输入 `cmd` 并按回车；macOS 或 Linux 用户打开终端。复制下面的命令，粘贴到窗口中并按回车，等待安装完成：
 
 ```sh
 npm install -g @playwright/mcp@0.0.83
 ```
 
-首次打开插件设置时，两个安装文件夹输入框为空。点击 **自动检测**，插件找到 Node.js 和 Playwright MCP 后会填入文件夹路径；确认两项均显示“已找到”，再点击 **保存配置**。保存成功后，再次打开设置会保留这些路径。
+### 3. 安装 Chrome 扩展
 
-也可以直接输入路径，或点击输入框右侧的**文件夹图标**选择安装文件夹，取消选择不会改动路径。**自动检测只检查已填写的位置，空白项才会自动查找并填入**。想重新查找某一项，先清空那一项再检测。
+用平时登录 X 的 Chrome 打开 [Playwright 扩展商店页面](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)，点击 **添加至 Chrome**，按提示完成安装。
 
-输入、选择或自动找到的路径都要点击 **保存配置** 后才会生效。保存时会检查两个目录；失败时保留输入，原有配置继续有效。如果刚安装 Node.js 后仍未检测到，请重启 Obsidian。详细操作和路径填写示例见设置中的 **查看配置教程**。
+点击 Chrome 右上角的 **扩展程序**（拼图图标），打开 Playwright 扩展。在同一个 Chrome 用户配置中登录 X，并确认可以新建长文章。更多说明见 [Playwright 官方扩展文档](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
 
-### 2. 安装 Chrome 扩展
+三项安装完成后，回到 Obsidian 的插件设置，点击 **自动检测**。首次使用时两个路径框为空，不会自行查找；点击后找到 Node.js 和 Playwright MCP 就会填入安装文件夹，确认两项均显示“已找到”，再点击 **保存配置**。
 
-用 Chrome 打开 [Playwright 扩展商店页面](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)，点击 **添加至 Chrome**。电脑上的 Playwright MCP 和浏览器扩展都需要安装；设置中的 **查看配置教程** 提供了安装入口与步骤。
+![image-20261014141140879](pic/README/image-20261014141140879.png)
 
-安装后，点击 Chrome 工具栏的 **扩展程序**（拼图图标），打开 Playwright 扩展。更多说明见 [Playwright 官方扩展文档](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
+已有路径只检查、不覆盖，空白项才自动查找；也可直接输入路径或点击**文件夹图标**选择目录。
 
-在同一个 Chrome 用户配置中登录 X，并确认可以新建长文章。
+![image-20261014141202463](pic/README/image-20261014141202463.png)
 
-点击 **自动检测** 也会查找 Chrome 中已安装的 Playwright 扩展文件。扩展显示“已找到”，只表示找到了安装文件；是否已启用、密钥是否有效以及能否连接 Chrome，都由后面的 **测试连接** 确认。未找到扩展时仍可保存 Node.js 和 MCP 路径。
+路径保存后生效，失败时原有配置继续有效。刚安装后未找到组件，可重启 Obsidian 再检测，或打开 **查看配置教程** 排查。
 
-### 3. 连接浏览器
+两项路径保存后，再次打开设置会自动检查这些位置和扩展，更新显示的状态；不会改写路径、覆盖正在输入的内容或启动 Chrome 连接。
+
+扩展显示“已找到”只表示找到了安装文件，实际能否使用由第 5 步的连接测试确认；未找到扩展仍可保存 Node.js 和 MCP 路径。
+
+### 4. 复制并保存连接密钥
 
 1. 打开 Chrome 中 Playwright 扩展的状态页。
 2. 复制 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 对应的密钥值。
 3. 回到插件设置，在 **浏览器凭证 → 连接密钥** 中粘贴密钥，点击 **保存**。
-4. 保持 Chrome 打开，点击 **测试连接**；显示“已连接到 Chrome”后完成配置。
 
-**保存密钥与测试连接是两个独立操作。** “已保存”表示密钥已保存，并不表示已经连上 Chrome。修改运行环境或密钥后，请先保存，再测试连接。测试只检查浏览器连接，不会创建文章，也不检查 X 登录状态或长文章权限。
+![image-20261014141226524](pic/README/playwright-extension-token-redacted.png)
 
-只需保存一个有效密钥，无需选择或切换密钥列表，也不用为每篇文章重新填写。切换 Chrome 用户配置或扩展密钥变化后，在同一输入框更新并保存即可。凭据由 Obsidian 密钥存储管理；配置有效后，后续连接无需逐次点击允许。
+*图中密钥已替换为示例文字，请复制你自己的扩展密钥。*
+
+![image-20261014141242253](pic/README/image-20261014141242253.png)
+
+密钥由 Obsidian 密钥存储管理，保存一份即可，无需每篇文章重新填写。切换 Chrome 用户配置或扩展密钥变化后，在同一输入框更新并保存。
+
+### 5. 测试连接
+
+保持 Chrome 打开，点击 **测试连接**；显示“**已连接到 Chrome**”后完成配置。
+
+![image-20261014141319016](pic/README/image-20261014141319016.png)
+
+“已保存”不等于已经连接；修改运行环境或密钥后，请先保存再测试。测试只检查能否连接 Chrome，不会创建文章，也不检查 X 登录状态或长文章权限。
+
+本次运行中测试成功后，重新打开设置会显示“**上次测试通过**”，表示上一次的结果。重启 Obsidian 或重新加载插件后，已有密钥显示“**密钥已保存，可测试连接**”。保存了不同的路径或密钥后，旧测试结果失效，需要重新测试。
 
 ## 使用
 

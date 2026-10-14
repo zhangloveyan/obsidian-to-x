@@ -15,6 +15,8 @@ import { DiagnosticModal } from './ui/diagnostic-modal';
 import { X_PUBLISHER_ICON, X_PUBLISHER_ICON_SVG } from './ui/icons';
 import type { BrowserBridge, ConnectionSettings, DraftResult, MediaAsset, ParsedNote, Progress } from './model';
 
+type ConnectionTestState = 'testing' | 'passed' | 'failed';
+
 export default class MarkdownXPublisher extends Plugin {
   settings: PublisherSettings = { ...DEFAULT_SETTINGS };
   busy = false;
@@ -22,6 +24,7 @@ export default class MarkdownXPublisher extends Plugin {
   private bridgeSettings: ConnectionSettings | null = null;
   private unloaded = false;
   private diagnosticLog: DiagnosticLog | undefined;
+  private connectionTest: { settings: ConnectionSettings; result: ConnectionTestState } | null = null;
 
   get diagnostics(): DiagnosticLog {
     return this.diagnosticLog ??= new DiagnosticLog(this.app, this.manifest?.dir ?? `${this.app.vault.configDir ?? '.obsidian'}/plugins/markdown-x-publisher`);
@@ -62,9 +65,18 @@ export default class MarkdownXPublisher extends Plugin {
     return { nodePath: this.settings.nodePath, mcpPath: this.settings.mcpPath,
       token: this.settings.secretName ? this.app.secretStorage.getSecret(this.settings.secretName) ?? '' : '' };
   }
+  connectionTestResult(): ConnectionTestState | null {
+    if (this.unloaded || !this.connectionTest) return null;
+    if (this.sameConnection(this.connectionTest.settings, this.connectionSettings())) return this.connectionTest.result;
+    // A credential write is provisional until saveData succeeds. Keep the old
+    // result available if that write fails and SecretStorage is rolled back.
+    if (!this.busy) this.connectionTest = null;
+    return null;
+  }
   async saveSettings(): Promise<void> {
     if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
     await this.saveData(this.settings);
+    this.invalidateChangedConnectionTest();
   }
   async saveAutoPreview(value: boolean): Promise<void> {
     if (this.unloaded || this.busy) throw new Error('当前操作尚未完成，请稍后再修改。');
@@ -84,6 +96,7 @@ export default class MarkdownXPublisher extends Plugin {
       // Keep the active pair and connection intact until both paths are persisted.
       await this.saveData(next);
       this.settings = next;
+      this.invalidateChangedConnectionTest();
       if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
     } finally { this.busy = false; }
   }
@@ -103,6 +116,7 @@ export default class MarkdownXPublisher extends Plugin {
       try { await this.saveData(next); }
       catch (error) { this.app.secretStorage.setSecret(name, previous); throw error; }
       this.settings = next;
+      this.invalidateChangedConnectionTest();
       if (this.bridgeSettings && !this.sameConnection(this.bridgeSettings, this.connectionSettings())) await this.releaseBridge();
     } catch {
       // SecretStorage and persistence errors must never echo the secret value.
@@ -114,6 +128,10 @@ export default class MarkdownXPublisher extends Plugin {
 
   private sameConnection(left: ConnectionSettings, right: ConnectionSettings): boolean {
     return left.nodePath === right.nodePath && left.mcpPath === right.mcpPath && left.token === right.token;
+  }
+
+  private invalidateChangedConnectionTest(): void {
+    if (this.connectionTest && !this.sameConnection(this.connectionTest.settings, this.connectionSettings())) this.connectionTest = null;
   }
 
   private assertConnectionCurrent(settings: ConnectionSettings): void {
@@ -168,14 +186,23 @@ export default class MarkdownXPublisher extends Plugin {
   async testConnection(): Promise<string> {
     if (this.unloaded) throw new Error('插件已停用，连接已取消。');
     if (this.busy) throw new Error('正在连接浏览器或保存草稿，请稍候。');
+    const attempt = { settings: this.connectionSettings(), result: 'testing' as ConnectionTestState };
+    this.connectionTest = attempt;
     this.busy = true;
     this.diagnostics.start('connection');
     const started = Date.now();
     try {
-      await this.getBridge(this.connectionSettings());
+      await this.getBridge(attempt.settings);
+      if (this.connectionTest === attempt) attempt.result = 'passed';
       this.diagnostics.record('operation.completed', { operation: 'connection', elapsedMs: Date.now() - started });
       return '已连接到 Chrome';
-    } catch (error) { this.diagnostics.fail('connection', error); await this.releaseBridge(); throw error; }
+    } catch (error) {
+      if (this.connectionTest === attempt) {
+        if (!this.unloaded && this.sameConnection(attempt.settings, this.connectionSettings())) attempt.result = 'failed';
+        else this.connectionTest = null;
+      }
+      this.diagnostics.fail('connection', error); await this.releaseBridge(); throw error;
+    }
     finally { this.busy = false; await this.diagnostics.flush(); }
   }
 
@@ -232,5 +259,5 @@ export default class MarkdownXPublisher extends Plugin {
     }
   }
 
-  onunload(): void { this.unloaded = true; void this.releaseBridge(); void this.diagnosticLog?.flush(); }
+  onunload(): void { this.unloaded = true; this.connectionTest = null; void this.releaseBridge(); void this.diagnosticLog?.flush(); }
 }
