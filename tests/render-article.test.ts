@@ -57,6 +57,20 @@ test('real text and its line breaks between images remain visible', async () => 
   assert.equal(root.elements('img').length, 2);
 });
 
+test('lists with images preview the same explicit numbering and paragraph order used for drafts', async () => {
+  const root = new Element('article');
+  const note = parseNote('1. 第一 **步**\n\n   ![[first.png]]\n\n   补充说明\n\n2. 第二步\n\n   ![[second.png]]\n\n3. 第三步', 'fixture.md');
+  const before = structuredClone(note.blocks);
+  (await renderer)(app, root, note, 'fixture.md');
+  assert.deepEqual(root.children.filter(child => child instanceof Element).map(child => [child.tag, child.tag === 'div' ? child.elements('img')[0]?.options.attr?.src : child.text]), [
+    ['h1', 'fixture'], ['p', '1. 第一 步'], ['div', 'fixture:first.png'], ['p', '补充说明'],
+    ['p', '2. 第二步'], ['div', 'fixture:second.png'], ['p', '3. 第三步'],
+  ]);
+  assert.equal(root.elements('ol').length, 0);
+  assert.equal(root.elements('strong')[0]?.text, '步');
+  assert.deepEqual(note.blocks, before);
+});
+
 test('formatted whitespace and missing-image diagnostics are not silently discarded', async () => {
   const root = new Element('article');
   const note: ParsedNote = { title: 'Fixture', body: '', blocks: [

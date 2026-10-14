@@ -2,6 +2,7 @@ import { Notice, PluginSettingTab, SecretComponent, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import type MarkdownXPublisher from './main';
 import { detectRuntime } from './browser/discovery';
+import { renderBrowserSetup } from './ui/setup';
 
 export interface PublisherSettings {
   nodePath: string;
@@ -77,10 +78,15 @@ export class PublisherSettingTab extends PluginSettingTab {
           this.publisher.settings.mcpPath = value.trim().replace(/^"|"$/g, ''); changedPath(); await this.publisher.saveSettings();
         }); });
     new Setting(root).setName('浏览器连接').setHeading();
-    root.createEl('p', { cls: 'mxp-help', text: '首次配置后即可重复使用。连接你日常使用的 Chrome，并复用已登录的 X 账号。' });
-    new Setting(root).setName('浏览器连接凭据').setDesc('在 Chrome 的 Playwright MCP Bridge 扩展中复制 token，在这里新建一个密钥并保存。密钥由 Obsidian 管理。')
+    renderBrowserSetup(root);
+    new Setting(root).setName('浏览器连接凭据').setDesc('只需配置一份密钥：点击 Link（关联），新建密钥并粘贴扩展中的 token，保存后即可重复使用。密钥由 Obsidian 管理。')
       .addComponent(el => new SecretComponent(this.app, el).setValue(this.publisher.settings.secretName)
-        .onChange(async value => { this.publisher.settings.secretName = value ?? ''; await this.publisher.saveSettings(); }));
+        .onChange(async value => {
+          this.publisher.settings.secretName = value ?? '';
+          await this.publisher.saveSettings();
+          status.setText(this.publisher.connectionSettings().token ? '连接凭据已配置，点击测试确认可用。' : '尚未配置连接凭据。');
+        }));
+    root.createEl('p', { cls: 'mxp-help', text: 'Change = 更换当前关联的密钥。插件每次只使用选中的这一份；切换 Chrome 用户配置或 token 变化时才需更新或更换，不用为每篇文章新建。列表里的其他密钥也可能供别的插件使用。' });
     const status = root.createDiv({ cls: 'mxp-connection-status', text: this.publisher.connectionSettings().token ? '连接凭据已配置，点击测试确认可用。' : '尚未配置连接凭据。' });
     status.setAttribute('role', 'status');
     new Setting(root).setName('测试连接').setDesc('只检查连接，不创建或发布文章。')

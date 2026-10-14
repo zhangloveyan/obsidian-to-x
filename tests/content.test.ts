@@ -87,12 +87,55 @@ test('ordered lists, unordered lists and quotes preserve order with adjacent ima
   assert.deepEqual(asText(note.blocks[0]).styles, [{ offset: 3, length: 2, style: 'Bold' }]);
 });
 
-test('list images retain list numbering by making following text a continuation paragraph', () => {
+test('list images use explicit numbers that survive serialization across image and continuation blocks', () => {
   const note = parseNote('1. before ![[a.png]] after\n2. next', 'note.md');
-  assert.deepEqual(note.blocks.map((block) => block.type === 'text' ? block.kind : block.type), [
-    'ordered-list-item', 'image', 'unstyled', 'ordered-list-item',
+  assert.deepEqual(note.blocks.map(block => block.type === 'text' ? [block.kind, block.text] : block.type === 'image' ? [block.type, block.source] : [block.type, block.markdown]), [
+    ['unstyled', '1. before '], ['image', 'a.png'], ['unstyled', ' after'], ['unstyled', '2. next'],
   ]);
-  assert.equal(asText(note.blocks[2]).text, ' after');
+  const wire = serializeContent(note.blocks, new Map([['a.png', { id: '123', localId: 'local-a', category: 'TweetImage' }]]));
+  assert.deepEqual(wire.blocks.map(block => [block.type, block.text]), [
+    ['unstyled', '1. before '], ['atomic', ' '], ['unstyled', ' after'], ['unstyled', '2. next'],
+  ]);
+  assert.equal(wire.entity_map[0]?.value.type, 'MEDIA');
+});
+
+test('list items keep multiple paragraphs, consecutive images and image-only first paragraphs in authored order', () => {
+  const source = '1. **第一😀** [链接](https://example.com)\n\n   ![甲](a.png)\n\n   继续 *说明*\n\n   ![[b.png]]\n\n   ![[c.png]]\n\n2. 第二\n\n3. ![[d.png]]\n\n   图后说明';
+  const note = parseNote(source, 'note.md');
+  assert.deepEqual(note.blocks.map(block => block.type === 'text' ? block.text : block.type === 'image' ? `image:${block.source}` : 'markdown'), [
+    '1. 第一😀 链接', 'image:a.png', '继续 说明', 'image:b.png', 'image:c.png', '2. 第二', '3. ', 'image:d.png', '图后说明',
+  ]);
+  const first = asText(note.blocks[0]);
+  assert.deepEqual(first.styles, [{ offset: 3, length: 4, style: 'Bold' }]);
+  assert.deepEqual(first.links, [{ offset: 8, length: 2, url: 'https://example.com' }]);
+  assert.deepEqual(asText(note.blocks[2]).styles, [{ offset: 3, length: 2, style: 'Italic' }]);
+  const media = new Map(['a', 'b', 'c', 'd'].map(name => [`${name}.png`, { id: name, localId: `local-${name}`, category: 'TweetImage' }]));
+  const wire = serializeContent(note.blocks, media);
+  assert.deepEqual(wire.blocks[0]?.entity_ranges, [{ key: 0, offset: 8, length: 2 }]);
+  assert.deepEqual(wire.blocks[0]?.inline_style_ranges, first.styles);
+  assert.deepEqual(wire.entity_map.filter(entity => entity.value.type === 'MEDIA').map(entity => entity.value.data.media_items), [
+    [{ media_id: 'a', local_media_id: 'local-a', media_category: 'TweetImage' }],
+    [{ media_id: 'b', local_media_id: 'local-b', media_category: 'TweetImage' }],
+    [{ media_id: 'c', local_media_id: 'local-c', media_category: 'TweetImage' }],
+    [{ media_id: 'd', local_media_id: 'local-d', media_category: 'TweetImage' }],
+  ]);
+  assert.equal(wire.blocks.some(block => block.type.includes('list-item')), false);
+});
+
+test('expanded unordered and non-default ordered lists retain markers without numbering continuation paragraphs', () => {
+  for (const [source, texts] of [
+    ['- first\n\n  more\n\n- second', ['• first', 'more', '• second']],
+    ['- ![[a.png]]\n- **next**', ['• ', '• next']],
+    ['9. first\n\n   ![[a.png]]\n\n10. [next](https://example.com)', ['9. first', '10. next']],
+    ['3. first\n\n   more\n\n4. next', ['3. first', 'more', '4. next']],
+  ] as const) {
+    const note = parseNote(source, 'note.md');
+    const text = note.blocks.filter(block => block.type === 'text');
+    assert.deepEqual(text.map(block => block.text), texts, source);
+    assert.ok(text.every(block => block.kind === 'unstyled'), source);
+    if (source.includes('**next**')) assert.deepEqual(text.at(-1)?.styles, [{ offset: 2, length: 4, style: 'Bold' }]);
+    if (source.includes('[next]')) assert.deepEqual(text.at(-1)?.links, [{ offset: 4, length: 4, url: 'https://example.com' }]);
+  }
 });
 
 test('unsupported nested blocks and inline code remain Markdown', () => {
@@ -113,15 +156,15 @@ test('images in fallback Markdown fail explicitly instead of creating incomplete
   }
 });
 
-test('list image errors show the image paragraph and surrounding source instead of the list start', () => {
-  const source = '## 使用\n\n1. 打开文章\n\n2. 打开 **预览**\n\n   ![截图](preview.png)\n\n3. 保存草稿';
+test('nested list image errors show the image paragraph and surrounding source instead of the list start', () => {
+  const source = '## 使用\n\n1. 打开文章\n\n2. 打开 **预览**\n\n   - ![截图](preview.png)\n\n3. 保存草稿';
   assert.throws(() => parseNote(source, 'note.md'), (error: unknown) => {
     assert.ok(error instanceof ArticleImageError);
     assert.equal(error.location, '原文第 7 行 · 编号列表');
     assert.deepEqual(error.context, [
       { line: 5, text: '2. 打开 **预览**', highlighted: false },
       { line: 6, text: '', highlighted: false },
-      { line: 7, text: '   ![截图](preview.png)', highlighted: true },
+      { line: 7, text: '   - ![截图](preview.png)', highlighted: true },
       { line: 8, text: '', highlighted: false },
       { line: 9, text: '3. 保存草稿', highlighted: false },
     ]);
@@ -132,12 +175,12 @@ test('list image errors show the image paragraph and surrounding source instead 
 });
 
 test('image diagnostics preserve original lines after properties and H1 removal without exposing comments', () => {
-  const source = '\uFEFF---\r\ntitle: private property\r\n---\r\n# 标题\r\n\r\n%%private\r\ncomment%%\r\n\r\n- 说明 %%private inline%%\r\n\r\n  ![[图.png]]';
+  const source = '\uFEFF---\r\ntitle: private property\r\n---\r\n# 标题\r\n\r\n%%private\r\ncomment%%\r\n\r\n- 说明 %%private inline%%\r\n\r\n  - ![[图.png]]';
   assert.throws(() => parseNote(source, 'note.md'), (error: unknown) => {
     assert.ok(error instanceof ArticleImageError);
     assert.equal(error.location, '原文第 11 行 · 无序列表');
     assert.equal(error.context[0]?.line, 9);
-    assert.equal(error.context.at(-1)?.text, '  ![[图.png]]');
+    assert.equal(error.context.at(-1)?.text, '  - ![[图.png]]');
     assert.equal(error.message.includes('private'), false);
     return true;
   });

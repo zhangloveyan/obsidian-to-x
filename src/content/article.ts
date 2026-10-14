@@ -234,20 +234,40 @@ function matchingClose(tokens: Token[], start: number): number {
 function nativeList(tokens: Token[], start: number, end: number): ContentBlock[] | null {
   const opener = tokens[start];
   const kind = opener?.type === 'ordered_list_open' ? 'ordered-list-item' : 'unordered-list-item';
-  if (opener?.attrGet('start') && String(opener.attrGet('start')) !== '1') return null;
-  const blocks: ContentBlock[] = [];
+  const firstNumber = Number(opener?.attrGet('start') ?? 1);
+  const items: ContentBlock[][] = [];
+  let expanded = false;
   let index = start + 1;
   while (index < end) {
     if (tokens[index]?.type !== 'list_item_open') return null;
     const itemEnd = matchingClose(tokens, index);
-    if (tokens[index + 1]?.type !== 'paragraph_open' || tokens[index + 2]?.type !== 'inline'
-      || tokens[index + 3]?.type !== 'paragraph_close' || itemEnd !== index + 4) return null;
-    const item = nativeInline(tokens[index + 2]?.children ?? [], kind);
-    if (!item) return null;
-    blocks.push(...item);
+    const item: ContentBlock[] = [];
+    let paragraphs = 0;
+    for (let paragraph = index + 1; paragraph < itemEnd; paragraph += 3) {
+      if (tokens[paragraph]?.type !== 'paragraph_open' || tokens[paragraph + 1]?.type !== 'inline'
+        || tokens[paragraph + 2]?.type !== 'paragraph_close') return null;
+      const blocks = nativeInline(tokens[paragraph + 1]?.children ?? [], paragraphs ? 'unstyled' : kind);
+      if (!blocks) return null;
+      item.push(...blocks);
+      paragraphs++;
+    }
+    if (!paragraphs) return null;
+    expanded ||= paragraphs > 1 || item.some(block => block.type === 'image');
+    items.push(item);
     index = itemEnd + 1;
   }
-  return blocks;
+  if (!expanded) return firstNumber === 1 ? items.flat() : null;
+  // Explicit markers preserve numbering without relying on native list
+  // continuation across images or multiple paragraphs in the preview and X.
+  return items.flatMap((item, itemIndex) => item.map(block => {
+    if (block.type !== 'text' || block.kind !== kind) return block;
+    const prefix = kind === 'ordered-list-item' ? `${firstNumber + itemIndex}. ` : '• ';
+    return {
+      ...block, kind: 'unstyled' as const, text: prefix + block.text,
+      styles: block.styles.map(style => ({ ...style, offset: style.offset + prefix.length })),
+      links: block.links.map(link => ({ ...link, offset: link.offset + prefix.length })),
+    };
+  }));
 }
 
 function nativeQuote(tokens: Token[], start: number, end: number): ContentBlock[] | null {

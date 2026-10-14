@@ -253,14 +253,14 @@ test('read failures disable save instead of leaving the previous note available 
 
 test('image errors show literal source context without navigation and clear after editing', async () => {
   const h = await harness();
-  const note = h.addEditor('文章.md', '# 标题\n\n1. 打开 **预览**\n\n   ![截图](preview.png)\n\n2. 保存草稿');
+  const note = h.addEditor('文章.md', '# 标题\n\n1. 打开 **预览**\n\n   - ![截图](preview.png)\n\n2. 保存草稿');
   h.activate(note.leaf);
   await h.preview.onOpen();
   const panel = h.article().find(element => element.options.cls === 'mxp-preview-error')!;
   assert.ok(panel);
   assert.equal(panel.find(element => element.options.cls === 'mxp-error-location')?.text, '原文第 5 行 · 编号列表');
   assert.ok(panel.find(element => element.text === '1. 打开 **预览**'));
-  assert.ok(panel.find(element => element.text === '   ![截图](preview.png)'));
+  assert.ok(panel.find(element => element.text === '   - ![截图](preview.png)'));
   assert.equal(panel.find(element => element.tag === 'button' || element.tag === 'img'), undefined);
   assert.equal(h.saveButton().disabled, true);
   h.saveButton().click();

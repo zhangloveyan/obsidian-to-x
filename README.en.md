@@ -79,7 +79,9 @@ If Node.js is still not detected after installation, restart Obsidian. For an un
 
 ### 2. Install the Chrome extension
 
-Follow the [official Playwright extension instructions](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md).
+Open the [Playwright extension in the Chrome Web Store](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm) using Chrome, then select **Add to Chrome**. Both the local Playwright MCP program and the browser extension are required. The plugin settings also include the installation link and steps.
+
+After installation, open Chrome's **Extensions** menu (the puzzle icon) and select the Playwright extension. See the [official extension instructions](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md) for details.
 
 Sign in to X in the same Chrome profile and confirm that you can create an Article.
 
@@ -87,10 +89,12 @@ Sign in to X in the same Chrome profile and confirm that you can create an Artic
 
 1. Open the Playwright extension's status page in Chrome.
 2. Copy `PLAYWRIGHT_MCP_EXTENSION_TOKEN`.
-3. In the plugin settings, create a secret under **Browser connection credential (浏览器连接凭据)**, paste the token, and select that secret.
+3. In the plugin settings, select **Link** under **Browser connection credential (浏览器连接凭据)**, create one secret, paste the token, and save the association.
 4. Select **Test connection (测试连接)**.
 
 Testing the connection does not create an article. Obsidian's secret storage manages the credential. Once a valid credential is configured, later connections do not require you to select Allow each time.
+
+**One valid secret is enough.** **Change** is Obsidian's built-in control for selecting a different secret. This plugin only uses the currently selected entry; the shared list may also contain secrets used by other plugins. Update or replace it when your Chrome profile or token changes, rather than creating a secret for each article.
 
 ## Usage
 
@@ -143,7 +147,8 @@ The crop is exported as a separate PNG without changing the original image or bo
 | Bold, italic, strikethrough | Text styles preserved |
 | Body headings | Converted to X headings; deeper levels are folded into the second level |
 | Simple quotes, unordered lists, simple ordered lists starting at 1 | Converted to native X text blocks |
-| Code blocks, tables, complex lists | Preserved as Markdown content blocks |
+| Single-level lists containing images or multiple paragraphs | Converted in order to paragraphs with explicit numbers or bullets and separate images; visible numbering is preserved, but X no longer auto-numbers these paragraphs |
+| Code blocks, tables, nested and other complex lists | Preserved as Markdown content blocks; images that cannot be extracted produce an error with source context |
 | Markdown images, `![[image.png]]` | Uploaded as body images |
 | Vault images, HTTP(S) images | Supported; online images must be directly downloadable |
 

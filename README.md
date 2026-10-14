@@ -79,7 +79,9 @@ npm install -g @playwright/mcp@0.0.83
 
 ### 2. 安装 Chrome 扩展
 
-按照 [Playwright 官方扩展说明](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)安装扩展。
+用 Chrome 打开 [Playwright 扩展商店页面](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm)，点击 **添加至 Chrome**。电脑上的 Playwright MCP 和浏览器扩展都需要安装；插件设置页也提供了安装入口与步骤。
+
+安装后，点击 Chrome 工具栏的 **扩展程序**（拼图图标），打开 Playwright 扩展。更多说明见 [Playwright 官方扩展文档](https://github.com/microsoft/playwright/blob/main/packages/extension/README.md)。
 
 在同一个 Chrome 用户配置中登录 X，并确认可以新建长文章。
 
@@ -87,10 +89,12 @@ npm install -g @playwright/mcp@0.0.83
 
 1. 打开 Chrome 中 Playwright 扩展的状态页。
 2. 复制 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`。
-3. 回到插件设置，在 **浏览器连接凭据** 中新建密钥，粘贴凭据并选择该密钥。
+3. 回到插件设置，在 **浏览器连接凭据** 中点击 **Link（关联）**，新建一份密钥，粘贴凭据并保存关联。
 4. 点击 **测试连接**。
 
 测试连接不会创建文章。凭据由 Obsidian 密钥存储管理；配置有效后，后续连接无需逐次点击允许。
+
+**一个有效密钥就够了。** **Change** 是 Obsidian 原生控件里的“更换当前关联密钥”；插件每次只使用选中的这一份。密钥列表也可能包含其他插件使用的条目。只有切换 Chrome 用户配置或 token 变化时，才需更新或更换，不用为每篇文章新建。
 
 ## 使用
 
@@ -143,7 +147,8 @@ npm install -g @playwright/mcp@0.0.83
 | 粗体、斜体、删除线 | 保留文字样式 |
 | 正文标题 | 转换为 X 标题；较深层级折叠为第二级 |
 | 简单引用、无序列表、从 1 开始的简单有序列表 | 转换为 X 原生文本块 |
-| 代码块、表格、复杂列表 | 以 Markdown 内容块保留 |
+| 包含图片或多个段落的单层列表 | 按顺序转换为带编号或圆点的普通段落与独立图片，保留可见编号；在 X 中不再自动续号 |
+| 代码块、表格、嵌套等其他复杂列表 | 以 Markdown 内容块保留；其中无法单独提取的图片会提示具体原文位置 |
 | Markdown 图片、`![[图片.png]]` | 上传为正文图片 |
 | 笔记库图片、HTTP(S) 图片 | 支持，网络图片需能直接下载 |
 

@@ -57,6 +57,8 @@
 .mxp-error-line-number { flex: 0 0 5ch; color: var(--text-muted); user-select: none; }
 .mxp-error-line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mxp-settings { max-width: 850px; }
+.mxp-browser-steps { padding-inline-start: 1.5em; line-height: 1.7; overflow-wrap: anywhere; }
+.mxp-browser-steps li + li { margin-top: 6px; }
 .mxp-settings .setting-item-control input[type="text"] { width: 280px; max-width: 100%; }
 .mxp-help { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.6; }
 .mxp-connection-status, .mxp-save-status {
