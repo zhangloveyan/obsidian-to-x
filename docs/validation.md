@@ -1,6 +1,6 @@
 # Verification record
 
-Version: **0.1.18** (local development changes included). Updated: **2026-10-14**. Timestamps below use UTC.
+Version: **0.1.19**. Updated: **2026-10-14**. Timestamps below use UTC.
 
 ## Build and automated checks
 
