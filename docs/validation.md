@@ -6,6 +6,8 @@ Version: **0.1.19**. Updated: **2026-10-14**. Timestamps below use UTC.
 
 `npm run package` passed TypeScript, the production build, whole-project ESLint and **197 tests**. The installable directory contains the five expected plugin files: `main.js`, `manifest.json`, `styles.css`, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
 
+For the 0.1.19 release, a clean `npm ci` and `npm run package` passed on Windows. GitHub's [Ubuntu check](https://github.com/zhangloveyan/obsidian-to-x/actions/runs/38519361208) also passed for release commit `8376c41`. The public [0.1.19 release](https://github.com/zhangloveyan/obsidian-to-x/releases/tag/0.1.19) includes all five plugin files and the manual-install ZIP; all six GitHub asset SHA-256 digests match the locally generated files. Community-directory review of this version has not yet been verified.
+
 The first Linux CI run exposed a missing Node.js `global` alias in two test VM fixtures. Version 0.1.12 supplied that alias inside each VM, preserving isolation from the host global object, and passed GitHub's Ubuntu build, lint and 157 tests. The affected tests still exercise real SDK child-process behavior. It also added an English README with a separate Chinese translation without changing application behavior.
 
 Version 0.1.13 addresses the directory's style checks: Cropper.js CSS is in the standard `styles.css` asset, scoped with `:where(.mxp-crop-modal)` and placed before the existing overrides. Removing that scope reproduces the original dependency CSS without declaration changes; CSS parsing and the eight cover tests passed. The modal test rejects dynamic style elements. The two fixed-style assignments inside the serialized X-page function have narrow ESLint exceptions explaining that Obsidian styles and DOM helpers are unavailable in Chrome. Both relevant Obsidian style rules now run locally. Development lint dependencies were updated and `npm audit` reports no vulnerabilities. The save algorithm and three-refresh media flow remain unchanged.
@@ -57,6 +59,8 @@ This verifies the DOM upload sequence against the current X interface. It was a 
 Version 0.1.16 fixes initial crop scaling. A local browser harness using the production crop modal and Cropper.js reproduced a landscape image opening at 104% before the fix. After the fix, 800×440 landscape, 420×800 portrait and 1200×300 wide fixtures all opened centered at 100%, with the shrink button disabled and no empty area inside the frame. Landscape and portrait image widths matched the frame; the wide image matched its height. Manual zoom and movement still worked, applying produced a 620×248 PNG, and reopening restored the exact adjusted canvas and 120% zoom. This used an Obsidian DOM shim and synthetic images; it was not a live Obsidian application check.
 
 ## Installed artifacts
+
+The released 0.1.19 files were copied into the existing local plugin directory on 2026-10-14. All five installed SHA-256 hashes matched the release package; `data.json` was unchanged.
 
 The 2026-10-14 local settings build, still version 0.1.18, was copied into the existing plugin directory. All five installed files matched the packaged SHA-256 hashes, and the existing `data.json` hash was unchanged. It requires reloading the installed plugin to activate; this local update does not represent a new published release.
 
