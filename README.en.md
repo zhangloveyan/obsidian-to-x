@@ -107,9 +107,7 @@ For the extension, **Found** only confirms that installation files were located.
 2. Copy the value of `PLAYWRIGHT_MCP_EXTENSION_TOKEN`.
 3. In the plugin settings, paste it into **Browser credential (浏览器凭证) → Connection token (连接密钥)** and select **Save (保存)**.
 
-![Playwright extension status page showing where to copy the connection token](pic/README/playwright-extension-token-redacted.png)
-
-*The token in this screenshot has been replaced with example text. Copy the token from your own extension.*
+![Playwright extension status page showing where to copy the connection token](pic/README/image-20261014141226524.png)
 
 ![The saved connection token is masked in the plugin settings, and the connection has not yet been tested](pic/README/image-20261014141242253.png)
 

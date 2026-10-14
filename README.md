@@ -107,9 +107,7 @@ npm install -g @playwright/mcp@0.0.83
 2. 复制 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 对应的密钥值。
 3. 回到插件设置，在 **浏览器凭证 → 连接密钥** 中粘贴密钥，点击 **保存**。
 
-![image-20261014141226524](pic/README/playwright-extension-token-redacted.png)
-
-*图中密钥已替换为示例文字，请复制你自己的扩展密钥。*
+![image-20261014141226524](pic/README/image-20261014141226524.png)
 
 ![image-20261014141242253](pic/README/image-20261014141242253.png)
 
