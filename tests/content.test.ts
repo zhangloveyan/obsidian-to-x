@@ -73,9 +73,18 @@ test('fenced code and GFM tables retain original Markdown and do not extract cod
   assert.deepEqual(note.blocks, [{ type: 'markdown', markdown: fence }, { type: 'markdown', markdown: table }]);
   const wire = serializeContent(note.blocks, new Map());
   assert.deepEqual(wire.entity_map.map((entity) => entity.value.type), ['MARKDOWN', 'MARKDOWN']);
-  assert.deepEqual(wire.entity_map.map((entity) => entity.value.data['markdown']), [`\n${fence}\n`, `\n${table}\n`]);
+  assert.deepEqual(wire.entity_map.map((entity) => entity.value.data['markdown']), [fence, table]);
   assert.equal(wire.entity_map[0]?.value.mutability, 'Mutable');
   assert.deepEqual(wire.blocks.map((block) => block.type), ['atomic', 'atomic', 'unstyled']);
+});
+
+test('Markdown insertion preserves authored indentation and blank lines without adding boundary newlines', () => {
+  const fence = ['```bash', '  printf "first"', '', '\tprintf "last"', '```'].join('\n');
+  const note = parseNote(fence, 'example.md');
+  const content = serializeContent(note.blocks, new Map());
+  assert.equal(content.entity_map[0]?.value.data.markdown, fence);
+  const indented = '\n\n    indented code\n\n';
+  assert.equal(serializeContent([{ type: 'markdown', markdown: indented }], new Map()).entity_map[0]?.value.data.markdown, indented);
 });
 
 test('ordered lists, unordered lists and quotes preserve order with adjacent images', () => {
@@ -329,7 +338,7 @@ test('wire links merge compatible overlaps, reject conflicting ones, and preserv
   const content = serializeContent([value, { type: 'markdown', markdown: '<img onerror=alert(1)>' }], new Map());
   assert.equal(content.blocks[0]?.text, value.text);
   assert.deepEqual(content.blocks[0]?.entity_ranges, [{ key: 0, offset: 0, length: 6 }]);
-  assert.equal(content.entity_map[1]?.value.data.markdown, '\n<img onerror=alert(1)>\n');
+  assert.equal(content.entity_map[1]?.value.data.markdown, '<img onerror=alert(1)>');
   assert.deepEqual(value, original);
   value.links[1]!.url = 'https://two.example';
   assert.throws(() => serializeContent([value], new Map()), /目标不同/);

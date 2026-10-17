@@ -467,8 +467,7 @@ export function serializeContent(blocks: ContentBlock[], media: Map<string, Uplo
       });
       addBlock('atomic', ' ', [], [{ key, offset: 0, length: 1 }]);
     } else {
-      const markdown = `${block.markdown.startsWith('\n') ? '' : '\n'}${block.markdown}${block.markdown.endsWith('\n') ? '' : '\n'}`;
-      const key = addEntity('MARKDOWN', 'Mutable', { markdown });
+      const key = addEntity('MARKDOWN', 'Mutable', { markdown: block.markdown });
       addBlock('atomic', ' ', [], [{ key, offset: 0, length: 1 }]);
     }
   }
